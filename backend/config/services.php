@@ -35,4 +35,14 @@ return [
         ],
     ],
 
+    'pinata' => [
+        'jwt' => env('PINATA_JWT_TOKEN'),
+        'gateway' => env('PINATA_GATEWAY', 'https://gateway.pinata.cloud/ipfs/'),
+    ],
+
+    'blockchain' => [
+        'rpc_url' => env('BLOCKCHAIN_RPC_URL', 'http://127.0.0.1:8545'),
+        'poverty_check_address' => env('POVERTY_CHECK_ADDRESS', '0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512'),
+    ],
+
 ];

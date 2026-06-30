@@ -1,4 +1,5 @@
-import React, { createContext, useState } from 'react';
+import React, { createContext, useState, useEffect } from 'react';
+import { ethers } from 'ethers';
 
 export const PhilanthropyContext = createContext();
 
@@ -119,16 +120,78 @@ export const PhilanthropyProvider = ({ children }) => {
   const [walletBalance, setWalletBalance] = useState(0);
   const [unreadNotifs, setUnreadNotifs] = useState(0);
 
+  useEffect(() => {
+    if (typeof window !== 'undefined' && typeof window.ethereum !== 'undefined') {
+      const handleAccountsChanged = async (accounts) => {
+        if (accounts.length > 0) {
+          const address = accounts[0];
+          try {
+            const provider = new ethers.BrowserProvider(window.ethereum);
+            const balanceWei = await provider.getBalance(address);
+            const balanceEth = parseFloat(ethers.formatEther(balanceWei));
+            setWalletAddress(address);
+            setWalletBalance(balanceEth);
+          } catch (e) {
+            console.error(e);
+          }
+        } else {
+          setWalletAddress("");
+          setWalletBalance(0);
+        }
+      };
+
+      const handleChainChanged = () => {
+        window.location.reload();
+      };
+
+      window.ethereum.on('accountsChanged', handleAccountsChanged);
+      window.ethereum.on('chainChanged', handleChainChanged);
+
+      const checkConnection = async () => {
+        try {
+          const provider = new ethers.BrowserProvider(window.ethereum);
+          const accounts = await provider.send("eth_accounts", []);
+          if (accounts.length > 0) {
+            const address = accounts[0];
+            const balanceWei = await provider.getBalance(address);
+            const balanceEth = parseFloat(ethers.formatEther(balanceWei));
+            setWalletAddress(address);
+            setWalletBalance(balanceEth);
+          }
+        } catch (err) {
+          console.error("Gagal memeriksa status koneksi wallet:", err);
+        }
+      };
+      checkConnection();
+
+      return () => {
+        if (window.ethereum.removeListener) {
+          window.ethereum.removeListener('accountsChanged', handleAccountsChanged);
+          window.ethereum.removeListener('chainChanged', handleChainChanged);
+        }
+      };
+    }
+  }, []);
+
   const connectWallet = async () => {
-    // Simulasi delay Metamask
-    return new Promise((resolve) => {
-      setTimeout(() => {
-        const dummyAddress = "0x8A2C9d...981c";
-        setWalletAddress(dummyAddress);
-        setWalletBalance(2.5); // Simulasi ETH balance
-        resolve(dummyAddress);
-      }, 1500);
-    });
+    if (typeof window !== 'undefined' && typeof window.ethereum !== 'undefined') {
+      try {
+        const provider = new ethers.BrowserProvider(window.ethereum);
+        const accounts = await provider.send("eth_requestAccounts", []);
+        const address = accounts[0];
+        const balanceWei = await provider.getBalance(address);
+        const balanceEth = parseFloat(ethers.formatEther(balanceWei));
+        setWalletAddress(address);
+        setWalletBalance(balanceEth);
+        return address;
+      } catch (error) {
+        console.error("Gagal menghubungkan wallet:", error);
+        return null;
+      }
+    } else {
+      alert("Silakan pasang MetaMask di browser Anda!");
+      return null;
+    }
   };
 
   const markNotifsRead = () => {

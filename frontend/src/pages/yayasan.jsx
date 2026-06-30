@@ -14,6 +14,9 @@ import { Home, Megaphone, ArrowRightLeft, FileText, LogOut, Search,
   X, RefreshCw, Sun, Moon, User } from "lucide-react";
 import { motion, AnimatePresence } from 'framer-motion';
 import { PhilanthropyContext } from '../context/PhilanthropyContext';
+import { ethers } from 'ethers';
+import { POVERTY_CHECK_ADDRESS } from '../contracts/addresses';
+import PovertyCheckABI from '../contracts/PovertyCheck.json';
 
 const formatETH = (n) => {
   let val = Number(n);
@@ -254,35 +257,144 @@ const CampaignView = ({ campaigns, onCreateModal, onManage, onDistribute, onActi
    3) PUSAT VERIFIKASI (Penerima Bantuan / ZKP Prover) - MODAL MODE
    ================================================================ */
 const VerificationView = ({ queue, onVerify, onAction }) => {
+  const context = React.useContext(PhilanthropyContext);
   const [verifying, setVerifying] = useState(null);
   const [activeItem, setActiveItem] = useState(null);
   const [step, setStep] = useState(0);
   const [banner, setBanner] = useState(null);
+  const [verifyMode, setVerifyMode] = useState(null); // null | 'select' | 'real' | 'simulation'
+  const [proofJson, setProofJson] = useState('');
+  const [txHash, setTxHash] = useState('');
+  const [errorMessage, setErrorMessage] = useState('');
 
-  const steps = [
+  const SAMPLE_ZKP_PROOF = {
+    a: [
+      "0x153724ad7b5bf6425dcdfd8c17c95c1eb7a45979d0eb57b917e8461009565b5f",
+      "0x0facfdf890fdb364cb1e9e898cbb3e489e604e88ca28ba62db270f71942e0452"
+    ],
+    b: [
+      [
+        "0x2c46f26e06b8a749d6870847ada2269670483b3568d6ccb495a59d945a25d85b",
+        "0x23c521d0f8cb959f9dc7bfe550124051d6b117cdb1d853c35f6f8dc496b53351"
+      ],
+      [
+        "0x19f12de493fe34d5e356231f633cfed6a872484c0a10a216fba6ce47927764db",
+        "0x06ba69d9d239c8d9b6d8090f4a274ffeded2cc6212ea297db5ca5b807dd90886"
+      ]
+    ],
+    c: [
+      "0x198e9393920d483a7260bfb731fb5d25f1aa493335a9e71297e485b7aef312c2",
+      "0x1800deef121f1e76426a00665e5c4479674322d4f75edadd46debd5cd992f6ed"
+    ],
+    input: [
+      "0x0000000000000000000000000000000000000000000000000000000000000001"
+    ]
+  };
+
+  const stepsSimulation = [
     'Memeriksa Bukti Dokumen',
     'Mencocokkan Data Digital',
     'Persetujuan Jaringan Sukses',
+  ];
+
+  const stepsReal = [
+    'Menyiapkan parameter bukti ZKP...',
+    'Meminta tanda tangan transaksi MetaMask...',
+    'Mengirim transaksi ke node blockchain...',
+    'Menunggu transaksi dimasukkan ke blok (Mining)...'
   ];
 
   const startVerification = (item) => {
     setVerifying(item.id);
     setActiveItem(item);
     setBanner(null);
+    setVerifyMode('select');
+    setStep(0);
+    setTxHash('');
+    setErrorMessage('');
+    setProofJson(JSON.stringify(SAMPLE_ZKP_PROOF, null, 2));
+  };
+
+  const startSimulation = () => {
+    setVerifyMode('simulation');
     setStep(0);
     setTimeout(() => setStep(1), 1200);
     setTimeout(() => setStep(2), 2600);
     setTimeout(() => {
       setStep(3);
-      setBanner(item);
-      onVerify(item);
+      setBanner(activeItem);
+      onVerify(activeItem);
     }, 4000);
+  };
+
+  const executeRealTransaction = async () => {
+    setVerifyMode('real');
+    setStep(0);
+    setErrorMessage('');
+    setTxHash('');
+
+    try {
+      if (typeof window.ethereum === 'undefined') {
+        throw new Error("MetaMask tidak terdeteksi. Silakan pasang ekstensi MetaMask.");
+      }
+
+      let proofData;
+      try {
+        proofData = JSON.parse(proofJson);
+      } catch (err) {
+        throw new Error("Format JSON bukti ZKP tidak valid. Pastikan penulisan JSON sudah benar.");
+      }
+
+      if (!proofData.a || !proofData.b || !proofData.c || !proofData.input) {
+        throw new Error("Struktur ZKP tidak lengkap. Harus memiliki array 'a', 'b', 'c', dan 'input'.");
+      }
+
+      setStep(1); // Menghubungkan & bersiap
+      const provider = new ethers.BrowserProvider(window.ethereum);
+      const signer = await provider.getSigner();
+
+      const contract = new ethers.Contract(
+        POVERTY_CHECK_ADDRESS,
+        PovertyCheckABI.abi,
+        signer
+      );
+
+      setStep(2); // Menunggu konfirmasi user
+      const tx = await contract.verifyPovertyStatus(
+        proofData.a,
+        proofData.b,
+        proofData.c,
+        proofData.input
+      );
+
+      setTxHash(tx.hash);
+      setStep(3); // Transaksi dikirim & sedang ditambang
+
+      const receipt = await tx.wait();
+      if (receipt.status === 0) {
+        throw new Error("Transaksi dibatalkan/direvert oleh node blockchain.");
+      }
+
+      setStep(4); // Sukses
+      setBanner(activeItem);
+      onVerify(activeItem);
+    } catch (error) {
+      console.error(error);
+      let errorMsg = error.message || "Terjadi kesalahan tidak dikenal.";
+      if (error.reason) errorMsg = error.reason;
+      if (error.data && error.data.message) errorMsg = error.data.message;
+      setErrorMessage(errorMsg);
+      setVerifyMode('select'); // Kembalikan ke layar pemilihan dengan pesan error
+    }
   };
 
   const closeVerificationModal = () => {
     setVerifying(null);
     setActiveItem(null);
     setStep(0);
+    setVerifyMode(null);
+    setTxHash('');
+    setErrorMessage('');
   };
 
   return (
@@ -305,7 +417,7 @@ const VerificationView = ({ queue, onVerify, onAction }) => {
             </div>
             <div>
               <p className="font-bold text-base">DATA VALID! Dompet {banner.wallet} berhasil diverifikasi.</p>
-              <p className="text-xs text-emerald-600 dark:text-emerald-400 mt-0.5">Proses verifikasi telah disetujui oleh seluruh jaringan.</p>
+              <p className="text-xs text-emerald-600 dark:text-emerald-400 mt-0.5">Proses verifikasi on-chain selesai dengan sukses.</p>
             </div>
             <button onClick={() => setBanner(null)} className="ml-auto text-emerald-400 hover:text-emerald-700 dark:hover:text-emerald-300">
               <X size={18} />
@@ -333,13 +445,20 @@ const VerificationView = ({ queue, onVerify, onAction }) => {
             </thead>
             <tbody className="divide-y divide-gray-50 dark:divide-slate-800">
               {queue.map((q) => {
-                const verified = q.proofStatus === 'Biru';
+                const verified = q.status === 'Verified';
                 return (
                   <tr key={q.id} className="hover:bg-gray-50 dark:hover:bg-slate-800/50 transition">
                     <td className="py-5 px-6 text-sm font-mono font-bold text-gray-700 dark:text-slate-300">{q.id}</td>
                     <td className="py-5 px-6 text-sm font-mono text-emerald-700 dark:text-emerald-400 flex items-center gap-2">
-                      {q.wallet}
-                      <Copy size={12} className="text-gray-400 dark:text-slate-500 cursor-pointer hover:text-emerald-600 dark:hover:text-emerald-400" />
+                      <span className="truncate max-w-[150px] inline-block">{q.wallet}</span>
+                      <Copy 
+                        size={12} 
+                        className="text-gray-400 dark:text-slate-500 cursor-pointer hover:text-emerald-600 dark:hover:text-emerald-400" 
+                        onClick={() => {
+                          navigator.clipboard.writeText(q.wallet);
+                          alert('Alamat dompet disalin!');
+                        }}
+                      />
                     </td>
                     <td className="py-5 px-6 text-xs text-gray-500 dark:text-slate-400">{q.timestamp}</td>
                     <td className="py-5 px-6 text-center">
@@ -362,10 +481,10 @@ const VerificationView = ({ queue, onVerify, onAction }) => {
                           <ShieldCheck size={14} /> Verifikasi
                         </button>
                       )}
-                      {verifying === q.id && (
+                      {verifying === q.id && !verified && (
                         <span className="text-xs font-bold text-amber-600 dark:text-amber-400 animate-pulse">Memproses...</span>
                       )}
-                      {verified && verifying !== q.id && (
+                      {verified && (
                         <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400 flex items-center justify-end gap-1">
                           <Check size={14} /> Selesai
                         </span>
@@ -379,7 +498,7 @@ const VerificationView = ({ queue, onVerify, onAction }) => {
         </div>
       </div>
 
-      {/* MODAL POP-UP: STATUS TRACKER */}
+      {/* MODAL POP-UP: STATUS TRACKER & MODE SELECTION */}
       <AnimatePresence>
         {verifying && activeItem && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -387,73 +506,193 @@ const VerificationView = ({ queue, onVerify, onAction }) => {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              onClick={step === 3 ? closeVerificationModal : undefined}
+              onClick={verifyMode === 'select' || step === 3 || step === 4 ? closeVerificationModal : undefined}
               className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm"
             />
             <motion.div
               initial={{ opacity: 0, scale: 0.95, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              className="bg-white dark:bg-slate-900 rounded-[2rem] border border-gray-100 dark:border-slate-800 shadow-2xl p-8 max-w-lg w-full relative z-10 flex flex-col"
+              className="bg-white dark:bg-slate-900 rounded-[2rem] border border-gray-100 dark:border-slate-800 shadow-2xl p-8 max-w-lg w-full relative z-10 flex flex-col max-h-[90vh] overflow-y-auto"
             >
-              <div className="mb-6">
+              <div className="mb-4">
                 <div className="flex justify-between items-start">
-                  <h3 className="font-extrabold text-xl text-gray-800 dark:text-slate-200 tracking-tight">Status Verifikasi</h3>
-                  {step === 3 && (
-                    <button onClick={closeVerificationModal} className="text-gray-400 dark:text-slate-500 hover:text-gray-600 dark:hover:text-slate-300 bg-gray-50 dark:bg-slate-800/50 hover:bg-gray-100 dark:hover:bg-slate-800 p-1.5 rounded-full transition">
-                      <X size={18} />
-                    </button>
-                  )}
+                  <h3 className="font-extrabold text-xl text-gray-800 dark:text-slate-200 tracking-tight">Proses Pengesahan ZKP</h3>
+                  <button onClick={closeVerificationModal} className="text-gray-400 dark:text-slate-500 hover:text-gray-600 dark:hover:text-slate-300 bg-gray-50 dark:bg-slate-800/50 hover:bg-gray-100 dark:hover:bg-slate-800 p-1.5 rounded-full transition">
+                    <X size={18} />
+                  </button>
                 </div>
                 <p className="text-xs text-gray-500 dark:text-slate-400 mt-1">
-                  Memproses ID: <span className="font-mono font-bold text-emerald-700 dark:text-emerald-400">{activeItem.id}</span>
+                  ID Pengajuan: <span className="font-mono font-bold text-emerald-700 dark:text-emerald-400">{activeItem.id}</span>
                 </p>
               </div>
 
-              <div className="space-y-6 my-4 flex-1">
-                {steps.map((s, i) => {
-                  const done = step > i;
-                  const active = step === i;
-                  return (
-                    <div key={i} className="flex items-start gap-4">
-                      <div className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 text-sm font-bold transition-all duration-500 ${done ? 'bg-emerald-600 text-white shadow-md shadow-emerald-100 dark:shadow-none' : active ? 'bg-amber-400 text-amber-900 animate-bounce' : 'bg-gray-100 dark:bg-slate-800 text-gray-400 dark:text-slate-500'}`}>
-                        {done ? <Check size={18} strokeWidth={3} /> : i + 1}
-                      </div>
-                      <div className="pt-1">
-                        <p className={`text-sm font-bold transition-colors ${done ? 'text-emerald-700 dark:text-emerald-400' : active ? 'text-amber-700 dark:text-[#F5A623]' : 'text-gray-400 dark:text-slate-500'}`}>
-                          {done && '[✓] '}{s}
-                        </p>
-                        {active && (
-                          <p className="text-[10px] text-[#F5A623] mt-0.5 animate-pulse">
-                            Sedang memproses bukti matematis...
-                          </p>
-                        )}
+              {/* MODE SELECTION */}
+              {verifyMode === 'select' && (
+                <div className="space-y-6 my-2 text-left">
+                  {errorMessage && (
+                    <div className="p-4 bg-rose-50 dark:bg-rose-900/30 text-rose-700 dark:text-rose-400 text-xs rounded-xl border border-rose-200 dark:border-rose-800 flex items-start gap-2">
+                      <AlertCircle size={16} className="shrink-0 mt-0.5" />
+                      <div>
+                        <p className="font-bold">Gagal Mengirim Transaksi:</p>
+                        <p className="font-mono mt-1 text-[10px] break-all">{errorMessage}</p>
                       </div>
                     </div>
-                  );
-                })}
-              </div>
+                  )}
 
-              <div className="mt-6 pt-4 border-t border-gray-50 dark:border-slate-800">
-                {step === 3 ? (
-                  <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-4">
-                    <div className="p-4 bg-emerald-50 dark:bg-emerald-900/30 rounded-xl border border-emerald-200 dark:border-emerald-800 text-center">
-                      <p className="text-sm font-bold text-emerald-700 dark:text-emerald-400">✅ Verifikasi On-Chain Sukses</p>
-                      <p className="text-[10px] text-emerald-600 dark:text-emerald-500 mt-1">
-                        Wallet resmi berstatus <code className="bg-emerald-100 dark:bg-emerald-900/50 px-1 rounded">verifiedRecipients = true</code>
+                  <div className="space-y-4">
+                    <div className="border border-gray-100 dark:border-slate-800 rounded-2xl p-5 hover:border-emerald-600 dark:hover:border-emerald-500 transition relative bg-slate-50/50 dark:bg-slate-800/20">
+                      <h4 className="font-black text-sm text-slate-800 dark:text-slate-100 flex items-center gap-2">
+                        <Wallet size={16} className="text-emerald-600" /> Jaringan Blockchain Real (MetaMask)
+                      </h4>
+                      <p className="text-xs text-gray-500 dark:text-slate-400 mt-2">
+                        Mengirimkan bukti matematis ZKP secara on-chain ke smart contract <code>PovertyCheck</code> di blockchain.
                       </p>
+
+                      <div className="mt-4">
+                        <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-1">Bukti ZKP (JSON)</label>
+                        <textarea
+                          rows={6}
+                          value={proofJson}
+                          onChange={(e) => setProofJson(e.target.value)}
+                          className="w-full p-3 font-mono text-[10px] bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-xl outline-none focus:border-emerald-600 dark:focus:border-emerald-500 text-slate-700 dark:text-slate-300"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setProofJson(JSON.stringify(SAMPLE_ZKP_PROOF, null, 2))}
+                          className="mt-2 text-[10px] font-bold text-emerald-700 dark:text-emerald-400 hover:underline block"
+                        >
+                          Muat Ulang Sampel Proof
+                        </button>
+                      </div>
+
+                      <button
+                        onClick={executeRealTransaction}
+                        className="w-full bg-emerald-800 text-white font-bold text-xs py-3 rounded-xl hover:bg-emerald-900 transition shadow-md shadow-emerald-800/10 mt-4 flex items-center justify-center gap-2"
+                      >
+                        <ShieldCheck size={14} /> Kirim Transaksi Ke Blockchain
+                      </button>
                     </div>
-                    <button onClick={closeVerificationModal} className="w-full bg-emerald-800 text-white font-bold text-sm py-3 rounded-xl hover:bg-emerald-900 transition shadow-lg shadow-emerald-800/10">
-                      Selesai & Tutup
-                    </button>
-                  </motion.div>
-                ) : (
-                  <div className="p-4 bg-amber-50 dark:bg-amber-900/30 rounded-xl border border-amber-100 dark:border-amber-800 flex items-center justify-center gap-3">
-                    <div className="w-2 h-2 rounded-full bg-amber-500 animate-ping" />
-                    <p className="text-xs font-semibold text-amber-700 dark:text-amber-400">Jangan menutup halaman, transaksi blockchain sedang dikirim...</p>
+
+                    <div className="border border-gray-100 dark:border-slate-800 rounded-2xl p-5 hover:border-amber-500 transition bg-slate-50/50 dark:bg-slate-800/20 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                      <div>
+                        <h4 className="font-black text-sm text-slate-800 dark:text-slate-100 flex items-center gap-2">
+                          <Settings size={16} className="text-amber-500" /> Mode Simulasi Off-Chain
+                        </h4>
+                        <p className="text-xs text-gray-500 dark:text-slate-400 mt-1 max-w-sm">
+                          Melompati transaksi blockchain untuk keperluan presentasi & pengujian fungsionalitas UI secara cepat.
+                        </p>
+                      </div>
+                      <button
+                        onClick={startSimulation}
+                        className="bg-slate-800 hover:bg-slate-900 dark:bg-slate-700 dark:hover:bg-slate-600 text-white font-bold text-xs px-5 py-3 rounded-xl transition shadow-md shrink-0"
+                      >
+                        Mulai Simulasi
+                      </button>
+                    </div>
                   </div>
-                )}
-              </div>
+                </div>
+              )}
+
+              {/* SIMULATION LOADER */}
+              {verifyMode === 'simulation' && (
+                <div className="space-y-6 my-4 text-left">
+                  {stepsSimulation.map((s, i) => {
+                    const done = step > i;
+                    const active = step === i;
+                    return (
+                      <div key={i} className="flex items-start gap-4">
+                        <div className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 text-sm font-bold transition-all duration-500 ${done ? 'bg-emerald-600 text-white shadow-md shadow-emerald-100 dark:shadow-none' : active ? 'bg-amber-400 text-amber-900 animate-bounce' : 'bg-gray-100 dark:bg-slate-800 text-gray-400 dark:text-slate-500'}`}>
+                          {done ? <Check size={18} strokeWidth={3} /> : i + 1}
+                        </div>
+                        <div className="pt-1">
+                          <p className={`text-sm font-bold transition-colors ${done ? 'text-emerald-700 dark:text-emerald-400' : active ? 'text-amber-700 dark:text-[#F5A623]' : 'text-gray-400 dark:text-slate-500'}`}>
+                            {done && '[✓] '}{s}
+                          </p>
+                          {active && (
+                            <p className="text-[10px] text-[#F5A623] mt-0.5 animate-pulse">
+                              Sedang memproses bukti matematis...
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+
+                  {step === 3 && (
+                    <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-4 pt-4">
+                      <div className="p-4 bg-emerald-50 dark:bg-emerald-900/30 rounded-xl border border-emerald-200 dark:border-emerald-800 text-center">
+                        <p className="text-sm font-bold text-emerald-700 dark:text-emerald-400">✅ Verifikasi Simulasi Sukses</p>
+                        <p className="text-[10px] text-emerald-600 dark:text-emerald-500 mt-1">
+                          Status pengajuan ID {activeItem.id} berhasil ditandai sebagai disetujui.
+                        </p>
+                      </div>
+                      <button onClick={closeVerificationModal} className="w-full bg-emerald-800 text-white font-bold text-sm py-3 rounded-xl hover:bg-emerald-900 transition shadow-lg shadow-emerald-800/10">
+                        Selesai & Tutup
+                      </button>
+                    </motion.div>
+                  )}
+                </div>
+              )}
+
+              {/* REAL BLOCKCHAIN LOADER */}
+              {verifyMode === 'real' && (
+                <div className="space-y-6 my-4 text-left">
+                  {stepsReal.map((s, i) => {
+                    const done = step > i;
+                    const active = step === i;
+                    return (
+                      <div key={i} className="flex items-start gap-4">
+                        <div className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 text-sm font-bold transition-all duration-500 ${done ? 'bg-emerald-600 text-white shadow-md shadow-emerald-100 dark:shadow-none' : active ? 'bg-amber-400 text-amber-900 animate-bounce' : 'bg-gray-100 dark:bg-slate-800 text-gray-400 dark:text-slate-500'}`}>
+                          {done ? <Check size={18} strokeWidth={3} /> : i + 1}
+                        </div>
+                        <div className="pt-1">
+                          <p className={`text-sm font-bold transition-colors ${done ? 'text-emerald-700 dark:text-emerald-400' : active ? 'text-amber-700 dark:text-[#F5A623]' : 'text-gray-400 dark:text-slate-500'}`}>
+                            {done && '[✓] '}{s}
+                          </p>
+                          {active && (
+                            <p className="text-[10px] text-[#F5A623] mt-0.5 animate-pulse">
+                              {i === 1 ? "Buka MetaMask dan konfirmasi transaksi..." : "Sedang melakukan mining transaksi..."}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+
+                  {txHash && (
+                    <div className="p-3 bg-slate-50 dark:bg-slate-900 border border-gray-100 dark:border-slate-800 rounded-xl">
+                      <p className="text-[10px] font-bold text-gray-400 uppercase">Hash Transaksi Blockchain</p>
+                      <div className="flex items-center gap-2 mt-1">
+                        <code className="text-xs text-slate-600 dark:text-slate-300 font-mono break-all bg-gray-100 dark:bg-slate-800 px-1 rounded flex-1">{txHash}</code>
+                        <Copy
+                          size={14}
+                          className="text-gray-400 dark:text-slate-500 hover:text-emerald-600 cursor-pointer"
+                          onClick={() => {
+                            navigator.clipboard.writeText(txHash);
+                            alert('Hash transaksi disalin!');
+                          }}
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  {step === 4 && (
+                    <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-4 pt-4">
+                      <div className="p-4 bg-emerald-50 dark:bg-emerald-900/30 rounded-xl border border-emerald-200 dark:border-emerald-800 text-center">
+                        <p className="text-sm font-bold text-emerald-700 dark:text-emerald-400">✅ Verifikasi On-Chain Sukses</p>
+                        <p className="text-[10px] text-emerald-600 dark:text-emerald-500 mt-1">
+                          Status pengajuan ID {activeItem.id} berhasil ditandai sebagai disetujui on-chain.
+                        </p>
+                      </div>
+                      <button onClick={closeVerificationModal} className="w-full bg-emerald-800 text-white font-bold text-sm py-3 rounded-xl hover:bg-emerald-900 transition shadow-lg shadow-emerald-800/10">
+                        Selesai & Tutup
+                      </button>
+                    </motion.div>
+                  )}
+                </div>
+              )}
+
             </motion.div>
           </div>
         )}
@@ -666,13 +905,16 @@ const YayasanPage = ({ onLogoutClick = () => {} }) => {
   ]);
 
   // ─── ZKP Queue State ───
-  const { dataPengajuan = [] } = React.useContext(PhilanthropyContext) || {};
+  const context = React.useContext(PhilanthropyContext);
+  const dataPengajuan = context?.dataPengajuan || [];
   const zkpQueue = dataPengajuan.filter(p => p.status === 'disetujui').map(p => ({
     id: p.id,
     kategori: p.kategori,
     nik: p.nik,
     score: 99,
-    status: p.tahapBantuan === 'Selesai' ? 'Verified' : 'Pending'
+    wallet: p.walletAddress || "0x...",
+    timestamp: p.tanggalSistem || "Baru saja",
+    status: (p.tahapBantuan === 'Cairkan Dana' || p.tahapBantuan === 'Selesai') ? 'Verified' : 'Pending'
   }));
   const setZkpQueue = () => {};
 
@@ -703,7 +945,10 @@ const YayasanPage = ({ onLogoutClick = () => {} }) => {
 
   // ─── Handlers ───
   const handleVerify = (item) => {
-    setZkpQueue((prev) => prev.map((q) => (q.id === item.id ? { ...q, proofStatus: 'Biru' } : q)));
+    if (context && context.updateTahapBantuan) {
+      context.updateTahapBantuan(item.id, "Cairkan Dana");
+      context.catatAktivitas(`Verifikasi ZKP Sukses`, `Dokumen ZKP ID ${item.id} sukses diverifikasi secara on-chain.`, "Yayasan");
+    }
   };
 
   const handleDistribute = (camp) => {
