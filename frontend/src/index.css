@@ -1,0 +1,19 @@
+@import "tailwindcss";
+@import "@fontsource/poppins/300.css";
+@import "@fontsource/poppins/400.css";
+@import "@fontsource/poppins/500.css";
+@import "@fontsource/poppins/600.css";
+@import "@fontsource/poppins/700.css";
+@import "@fontsource/poppins/800.css";
+
+/* 1. WAJIB DI TAILWIND v4: Daftarkan variant dark mode berbasis class HTML */
+@variant dark (&:where(.dark, .dark *));
+
+@layer base {
+  body {
+    /* 2. Tambahkan dark:bg-slate-950 dan dark:text-slate-100 di sini agar background body ikut berubah */
+    @apply m-0 bg-[#F9FAFB] dark:bg-slate-950 text-gray-800 dark:text-slate-100 antialiased; 
+    font-family: 'Poppins', system-ui, -apple-system, sans-serif;
+    transition: background-color 0.3s ease, color 0.3s ease;
+  }
+}
