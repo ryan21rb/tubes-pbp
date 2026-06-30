@@ -273,7 +273,7 @@ export default function ValidatorDashboard({ onLogoutClick = () => {} }) {
       <main className="flex-1 ml-[260px] min-w-0 bg-slate-50 dark:bg-slate-950">
         {/* HEADER FLUSH TO TOP */}
         <header className="bg-white dark:bg-slate-900 shadow-sm border-b border-gray-100 dark:border-slate-800 sticky top-0 z-30 transition-colors">
-          <div className="max-w-7xl mx-auto px-8 py-5 flex justify-between items-center w-full">
+          <div className="max-w-[1440px] mx-auto px-8 py-5 flex justify-between items-center w-full">
             <h2 className="text-xl md:text-2xl font-black uppercase tracking-wider text-emerald-900 dark:text-emerald-400">
               {activeTab === 'beranda' ? 'Beranda' : activeTab === 'verifikasi' ? 'Verifikasi' : activeTab === 'riwayat' ? 'Riwayat' : 'Laporan'}
             </h2>
@@ -302,7 +302,7 @@ export default function ValidatorDashboard({ onLogoutClick = () => {} }) {
           </div>
         </header>
 
-        <div className="p-8 lg:p-12 max-w-7xl mx-auto space-y-8">
+        <div className="p-8 lg:p-12 max-w-[1440px] mx-auto space-y-8">
 
           {/* ================= BERANDA ================= */}
           {activeTab === "beranda" && (

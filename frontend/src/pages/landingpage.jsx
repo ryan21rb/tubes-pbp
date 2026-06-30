@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useContext } from "react";
+import { apiLogin, apiRegister } from '../services/api';
 import ryan from '../assets/ryan.jpeg';
 import dita from '../assets/dita.jpeg';
 import arham from '../assets/arham.jpeg';
@@ -93,8 +94,9 @@ const CounterUp = ({ target, duration = 3500, prefix = "", suffix = "" }) => {
 };
 
 export default function LandingPage({ onLoginClick }) {
-  const context = React.useContext(PhilanthropyContext);
+  const context = useContext(PhilanthropyContext);
   const connectWallet = context?.connectWallet;
+  const setAuthToken = context?.setAuthToken;
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isDarkMode, setIsDarkMode] = useState(false);
@@ -106,6 +108,9 @@ export default function LandingPage({ onLoginClick }) {
   const [authForm, setAuthForm] = useState({ name: "", username: "", email: "", password: "", confirmPassword: "" });
   const [isConnecting, setIsConnecting] = useState(false);
   const [isWalletBlinking, setIsWalletBlinking] = useState(false);
+  // State khusus auth API
+  const [isAuthLoading, setIsAuthLoading] = useState(false);
+  const [authError, setAuthError] = useState(null);
   const heroImages = [donasi, arham, dita, ryan, logo];
 
   const navItems = [
@@ -175,42 +180,99 @@ export default function LandingPage({ onLoginClick }) {
     }, 3000); 
   };
 
-  // Alur 2: Saat form di dalam Modal disubmit, panggil pop-up Metamask untuk persetujuan (Sign)
+  // Alur 2: Saat form di dalam Modal disubmit
+  // 1. Minta tanda tangan MetaMask (personal_sign)
+  // 2. Kirim payload ke Laravel API (login/register)
+  // 3. Simpan Sanctum token ke localStorage via context
+  // 4. Redirect ke dashboard sesuai role dari response API
   const handleAuthSubmit = async (e) => {
     e.preventDefault();
-    if (!window.ethereum) return alert("MetaMask diperlukan");
-    
+    if (!window.ethereum) return alert('MetaMask diperlukan untuk autentikasi.');
+    setAuthError(null);
+    setIsAuthLoading(true);
+
     try {
+      // === LANGKAH 1: Minta akun & tanda tangan MetaMask ===
       const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
       const address = accounts[0];
-      const message = `Saya menandatangani pesan ini untuk ${authMode === 'login' ? 'masuk' : 'mendaftar'} ke PhilanthropyChain.\n\nAlamat: ${address}\nWaktu: ${new Date().getTime()}`;
-      
+      const timestamp = new Date().getTime();
+      const message = `Saya menandatangani pesan ini untuk ${authMode === 'login' ? 'masuk' : 'mendaftar'} ke PhilanthropyChain.\n\nAlamat: ${address}\nWaktu: ${timestamp}`;
+
       const signature = await window.ethereum.request({
         method: 'personal_sign',
         params: [message, address],
       });
-      
-      if (signature) {
-        const addressLower = address.toLowerCase();
-        
-        // Mock addresses for routing
-        const yayasanAddress = "0xyayasan"; // Ganti dengan address asli yayasan
-        const instansiAddresses = ["0xinstansi1", "0xinstansi2", "0xinstansi3", "0xinstansi4"];
-        const penerimaAddresses = context?.penerimaAddresses || [];
 
-        if (addressLower === yayasanAddress || addressLower === "0x8212c9a2fdb3e71c") {
-           window.location.hash = "#/yayasan";
-        } else if (instansiAddresses.includes(addressLower) || addressLower === "0x08212c9a2fdb3e71c") {
-           window.location.hash = "#/instansi";
-        } else if (penerimaAddresses.includes(addressLower)) {
-           window.location.hash = "#/penerima";
-        } else {
-           window.location.hash = "#/donatur";
-        }
+      // === LANGKAH 2: Kirim ke Laravel Backend ===
+      let response;
+      if (authMode === 'register') {
+        // Payload register: sertakan data form + signature MetaMask
+        const payload = {
+          name: authForm.name || authForm.username || '',
+          email: authForm.email || '',
+          password: authForm.password || '',
+          password_confirmation: authForm.confirmPassword || authForm.password || '',
+          wallet_address: address,
+          signature,
+          message,
+        };
+        response = await apiRegister(payload);
+      } else {
+        // Payload login: cukup wallet_address + signature
+        const payload = {
+          wallet_address: address,
+          signature,
+          message,
+          // Opsional: email/password jika backend butuh
+          ...(authForm.email && { email: authForm.email }),
+          ...(authForm.password && { password: authForm.password }),
+        };
+        response = await apiLogin(payload);
       }
+
+      // === LANGKAH 3: Ekstrak & simpan Sanctum token ===
+      const token = response?.token || response?.data?.token || response?.access_token;
+      const role = response?.role || response?.data?.role || response?.user?.role || 'donatur';
+
+      if (!token) {
+        throw new Error('Server tidak mengembalikan token autentikasi. Pastikan backend berjalan.');
+      }
+
+      // Simpan token ke localStorage & update context
+      localStorage.setItem('auth_token', token);
+      localStorage.setItem('user_role', role);
+      if (setAuthToken) setAuthToken(token, role);
+
+      // Hubungkan wallet ke context juga
+      if (connectWallet) await connectWallet();
+
+      // === LANGKAH 4: Redirect berdasarkan role dari response API ===
+      // Backend Laravel menentukan role: 'yayasan', 'instansi', 'penerima', 'donatur'
+      const roleLower = (role || '').toLowerCase();
+      if (roleLower === 'yayasan') {
+        window.location.hash = '#/yayasan';
+      } else if (roleLower === 'instansi' || roleLower === 'validator') {
+        window.location.hash = '#/instansi';
+      } else if (roleLower === 'penerima') {
+        window.location.hash = '#/penerima';
+      } else {
+        // Default: donatur
+        window.location.hash = '#/donatur';
+      }
+
+      setAuthMode(null); // Tutup modal
+
     } catch (error) {
-      console.error(error);
-      alert("Autentikasi MetaMask gagal atau dibatalkan.");
+      console.error('[handleAuthSubmit] Error:', error);
+      // Tampilkan pesan error yang informatif
+      if (error.code === 4001) {
+        // User menolak tanda tangan di MetaMask
+        setAuthError('Anda membatalkan tanda tangan MetaMask. Coba lagi untuk masuk.');
+      } else {
+        setAuthError(error.message || 'Autentikasi gagal. Periksa koneksi backend dan coba lagi.');
+      }
+    } finally {
+      setIsAuthLoading(false);
     }
   };
 
@@ -241,7 +303,7 @@ export default function LandingPage({ onLoginClick }) {
 </div>
 
           {/* Desktop Nav Links */}
-          <div className={`hidden md:flex items-center space-x-2 font-medium bg-transparent`}>
+          <div className={`hidden md:flex items-center space-x-4 lg:space-x-6 font-medium bg-transparent`}>
             {navItems.map((item) => (
               <a
                 key={item.name}
@@ -313,9 +375,9 @@ export default function LandingPage({ onLoginClick }) {
       {/* ================= HERO SECTION ================= */}
       <section
         id="beranda"
-        className="pt-24 pb-16 md:pt-28 md:pb-24 w-full px-6 md:px-12"
+        className="pt-24 pb-16 md:pt-28 md:pb-24 w-full"
       >
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center max-w-7xl mx-auto ">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center max-w-[1440px] mx-auto px-6 md:px-12">
           
           {/* Kiri - Teks */}
           <div className="lg:col-span-7 space-y-6 text-center lg:text-left">
@@ -351,13 +413,13 @@ export default function LandingPage({ onLoginClick }) {
 
           {/* Kanan - Gambar Persegi */}
           <div className="lg:col-span-5 flex justify-center lg:justify-end">
-            <div className="relative w-full max-w-[400px] aspect-square rounded-3xl overflow-hidden shadow-2xl border-4 border-white dark:border-slate-800">
+            <div className="relative w-full max-w-[400px] aspect-square rounded-3xl overflow-hidden shadow-2xl border-4 border-white dark:border-slate-800 transition-all duration-500 hover:scale-[1.03] hover:shadow-[0_0_40px_rgba(16,185,129,0.4)] dark:hover:shadow-[0_0_40px_rgba(255,255,255,0.3)] cursor-pointer group">
               <img
                 src={donasi} 
                 alt="Donasi PhilanthropyChain"
-                className="w-full h-full object-cover"
+                className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
               />
-              <div className="absolute inset-0 bg-gradient-to-tr from-emerald-900/20 to-transparent" />
+              <div className="absolute inset-0 bg-gradient-to-tr from-emerald-900/20 to-transparent transition-opacity duration-500 group-hover:opacity-75" />
             </div>
           </div>
         </div>
@@ -365,7 +427,7 @@ export default function LandingPage({ onLoginClick }) {
 
       {/* ================= STATISTIK LIVE ================= */}
       <section className="bg-slate-50/50 dark:bg-slate-950 transition-colors duration-300">
-        <div className="max-w-8xl px-5 sm:px-8 lg:px-8 mx-auto">
+        <div className="max-w-[1440px] px-5 sm:px-8 lg:px-8 mx-auto">
           <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-3xl p-6 md:p-8 shadow-sm transition-colors duration-300">
             <div className="flex justify-center -mt-12 md:-mt-14 mb-8">
               <div className="inline-flex items-center gap-2.5 bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 px-4 py-1.5 rounded-full border border-emerald-100/60 dark:border-emerald-900/50 shadow-sm">
@@ -389,7 +451,7 @@ export default function LandingPage({ onLoginClick }) {
                     Total Donasi Tersalurkan
                   </p>
                   <h3 className="text-xl md:text-2xl font-bold tracking-tight text-emerald-950 dark:text-emerald-100 whitespace-nowrap">
-                    ETH <CounterUp target="127.5" duration={3500} />
+                    <CounterUp target="127.5" duration={3500} /> ETH 
                   </h3>
                 </div>
               </div>
@@ -446,7 +508,7 @@ export default function LandingPage({ onLoginClick }) {
         className="py-15 dark:bg-slate-950 transition-colors duration-300"
       >
         <div className="pt-16 border-t border-slate-200 dark:border-slate-800 mt-1 mb-1"></div>
-        <div className="max-w-8xl px-4 sm:px-6 lg:px-8 mx-auto">
+        <div className="max-w-[1440px] px-4 sm:px-6 lg:px-8 mx-auto">
           <div className="text-center max-w-3xl mx-auto mb-16 space-y-3">
             <h2 className="text-3xl sm:text-4xl font-extrabold text-slate-900 dark:text-white tracking-tight uppercase">
               ALUR DISTRIBUSI{" "}
@@ -459,101 +521,100 @@ export default function LandingPage({ onLoginClick }) {
             </p>
           </div>
 
-          <div className="flex flex-col md:flex-row md:flex-wrap lg:flex-nowrap justify-center items-center lg:items-stretch gap-6 lg:gap-3 w-full mx-auto">
-            <div className="w-full md:w-[45%] lg:w-55 min-h-62.5 bg-emerald-50/80 dark:bg-emerald-950/20 border border-emerald-100 dark:border-emerald-900/30 rounded-3xl p-5 shadow-sm flex flex-col justify-between transition-all hover:-translate-y-1 duration-300">
-              <div className="flex flex-col h-full justify-between flex-1">
-                <div className="flex items-center space-x-2.5 mb-5">
-                  <div className="text-emerald-700 dark:text-emerald-400 shrink-0">
-                    <Compass size={24} strokeWidth={2.5} />
-                  </div>
-                  <span className="text-[10px] font-bold text-emerald-800 dark:text-emerald-400 bg-emerald-100/60 dark:bg-emerald-900/40 px-2 py-0.5 rounded-full tracking-wider whitespace-nowrap">
-                    01. Program Resmi
-                  </span>
+          <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-6 w-full mx-auto relative z-10">
+            {/* Step 1 - Very Light */}
+            <div className="relative group bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-100 dark:border-emerald-900/30 rounded-3xl p-6 shadow-sm hover:shadow-xl hover:border-emerald-300 dark:hover:border-emerald-700 transition-all duration-300 flex flex-col">
+              <div className="absolute top-0 right-0 w-24 h-24 bg-gradient-to-bl from-emerald-100/50 dark:from-emerald-900/20 rounded-bl-[100px] rounded-tr-3xl z-0 group-hover:from-emerald-200/50 dark:group-hover:from-emerald-800/30 transition-colors"></div>
+              
+              <div className="flex items-center space-x-3 mb-5 relative z-10">
+                <div className="w-12 h-12 rounded-2xl bg-emerald-100 dark:bg-emerald-900/50 text-emerald-700 dark:text-emerald-400 flex items-center justify-center shrink-0 group-hover:scale-110 transition-all">
+                  <Compass size={24} strokeWidth={2.5} />
                 </div>
-                <p className="text-sm font-medium text-black dark:text-slate-300 leading-relaxed flex-1">
-                  Yayasan membuat kampanye galang dana resmi yang transparan di sistem.
-                </p>
-              </div>
-            </div>
-
-            <div className="hidden lg:flex items-center justify-center text-emerald-600 dark:text-emerald-400 shrink-0 self-center">
-              <ChevronRight size={20} strokeWidth={3} />
-            </div>
-
-            <div className="w-full md:w-[45%] lg:w-55 min-h-62.5 bg-emerald-100/60 dark:bg-emerald-900/30 border border-emerald-200/40 dark:border-emerald-800/30 rounded-3xl p-5 shadow-sm flex flex-col justify-between transition-all hover:-translate-y-1 duration-300">
-              <div className="flex flex-col h-full justify-between flex-1">
-                <div className="flex items-center space-x-2.5 mb-5">
-                  <div className="text-emerald-800 dark:text-emerald-400 shrink-0">
-                    <Lock size={24} strokeWidth={2.5} />
-                  </div>
-                  <span className="text-[10px] font-bold text-emerald-900 dark:text-emerald-400 bg-emerald-200/50 dark:bg-emerald-900/50 px-2 py-0.5 rounded-full tracking-wider whitespace-nowrap">
-                    02. Donasi Aman
-                  </span>
+                <div>
+                  <div className="text-[10px] font-black text-emerald-600/70 dark:text-emerald-500/70 uppercase tracking-widest">Langkah 01</div>
+                  <h3 className="font-bold text-emerald-900 dark:text-emerald-200 text-sm">Program Resmi</h3>
                 </div>
-                <p className="text-sm font-medium text-black dark:text-slate-300 leading-relaxed flex-1">
-                  Dana dari donatur otomatis terkunci di Smart Contract tanpa perantara rekening orang lain.
-                </p>
               </div>
+              
+              <p className="text-sm text-emerald-700 dark:text-emerald-400/80 leading-relaxed flex-1 relative z-10">
+                Yayasan membuat kampanye galang dana resmi yang transparan di sistem.
+              </p>
             </div>
 
-            <div className="hidden lg:flex items-center justify-center text-emerald-600 dark:text-emerald-400 shrink-0 self-center">
-              <ChevronRight size={20} strokeWidth={3} />
-            </div>
-
-            <div className="w-full md:w-[45%] lg:w-55 min-h-62.5 bg-emerald-200/60 dark:bg-emerald-800/40 border border-emerald-300/30 dark:border-emerald-700/30 rounded-3xl p-5 shadow-sm flex flex-col justify-between transition-all hover:-translate-y-1 duration-300">
-              <div className="flex flex-col h-full justify-between flex-1">
-                <div className="flex items-center space-x-2.5 mb-5">
-                  <div className="text-emerald-900 dark:text-emerald-400 shrink-0">
-                    <FileCheck size={24} strokeWidth={2.5} />
-                  </div>
-                  <span className="text-[10px] font-bold text-emerald-950 dark:text-emerald-300 bg-emerald-300/40 dark:bg-emerald-800/50 px-2 py-0.5 rounded-full tracking-wider whitespace-nowrap">
-                    03. Verifikasi Ketat
-                  </span>
+            {/* Step 2 - Light/Medium */}
+            <div className="relative group bg-emerald-100 dark:bg-emerald-900/60 border border-emerald-200 dark:border-emerald-800/50 rounded-3xl p-6 shadow-sm hover:shadow-xl hover:border-emerald-400 dark:hover:border-emerald-600 transition-all duration-300 flex flex-col">
+              <div className="absolute top-0 right-0 w-24 h-24 bg-gradient-to-bl from-emerald-200/50 dark:from-emerald-800/20 rounded-bl-[100px] rounded-tr-3xl z-0 group-hover:from-emerald-300/50 dark:group-hover:from-emerald-700/30 transition-colors"></div>
+              
+              <div className="flex items-center space-x-3 mb-5 relative z-10">
+                <div className="w-12 h-12 rounded-2xl bg-emerald-200 dark:bg-emerald-800 text-emerald-800 dark:text-emerald-300 flex items-center justify-center shrink-0 group-hover:scale-110 transition-all">
+                  <Lock size={24} strokeWidth={2.5} />
                 </div>
-                <p className="text-sm font-medium text-black dark:text-slate-200 leading-relaxed flex-1">
-                  Berkas penerima bantuan divalidasi langsung oleh pihak berwenang seperti Rumah Sakit atau Kelurahan.
-                </p>
-              </div>
-            </div>
-
-            <div className="hidden lg:flex items-center justify-center text-emerald-600 dark:text-emerald-400 shrink-0 self-center">
-              <ChevronRight size={20} strokeWidth={3} />
-            </div>
-
-            <div className="w-full md:w-[45%] lg:w-55 min-h-62.5 bg-emerald-500 dark:bg-emerald-700 border border-emerald-600/20 rounded-3xl p-5 shadow-sm flex flex-col justify-between transition-all hover:-translate-y-1 duration-300 text-white">
-              <div className="flex flex-col h-full justify-between flex-1">
-                <div className="flex items-center space-x-2.5 mb-5">
-                  <div className="text-emerald-200 dark:text-emerald-300 shrink-0">
-                    <ShieldCheck size={24} strokeWidth={2.5} />
-                  </div>
-                  <span className="text-[10px] font-bold text-emerald-800 dark:text-emerald-200 bg-emerald-100 dark:bg-emerald-900/60 px-2 py-0.5 rounded-full tracking-wider whitespace-nowrap">
-                    04. Menjaga Privasi
-                  </span>
+                <div>
+                  <div className="text-[10px] font-black text-emerald-700/70 dark:text-emerald-400/70 uppercase tracking-widest">Langkah 02</div>
+                  <h3 className="font-bold text-emerald-950 dark:text-emerald-100 text-sm">Donasi Aman</h3>
                 </div>
-                <p className="text-sm font-medium text-white dark:text-emerald-100 leading-relaxed flex-1">
-                  Verifikasi dilakukan secara digital sehingga privasi identitas nama asli penerima tetap aman dan terjaga.
-                </p>
               </div>
+              
+              <p className="text-sm text-emerald-800 dark:text-emerald-300 leading-relaxed flex-1 relative z-10">
+                Dana donatur terkunci di Smart Contract tanpa perantara rekening orang lain.
+              </p>
             </div>
 
-            <div className="hidden lg:flex items-center justify-center text-emerald-600 dark:text-emerald-400 shrink-0 self-center">
-              <ChevronRight size={20} strokeWidth={3} />
-            </div>
-
-            <div className="w-full md:w-[45%] lg:w-55 min-h-62.5 bg-emerald-600 dark:bg-emerald-600 border border-emerald-700/20 rounded-3xl p-5 shadow-md flex flex-col justify-between transition-all hover:-translate-y-1 duration-300 text-white">
-              <div className="flex flex-col h-full justify-between flex-1">
-                <div className="flex items-center space-x-2.5 mb-5">
-                  <div className="text-emerald-200 dark:text-emerald-300 shrink-0">
-                    <Coins size={24} strokeWidth={2.5} />
-                  </div>
-                  <span className="text-[10px] font-bold text-emerald-800 dark:text-emerald-200 bg-emerald-100 dark:bg-emerald-900/60 px-2 py-0.5 rounded-full tracking-wider whitespace-nowrap">
-                    05. Pencairan Transparan
-                  </span>
+            {/* Step 3 - Medium */}
+            <div className="relative group bg-emerald-500 dark:bg-emerald-800 border border-emerald-600 dark:border-emerald-700 rounded-3xl p-6 shadow-md hover:shadow-xl hover:bg-emerald-400 dark:hover:bg-emerald-700 transition-all duration-300 flex flex-col text-white">
+              <div className="absolute top-0 right-0 w-24 h-24 bg-gradient-to-bl from-white/10 rounded-bl-[100px] rounded-tr-3xl z-0 group-hover:from-white/20 transition-colors"></div>
+              
+              <div className="flex items-center space-x-3 mb-5 relative z-10">
+                <div className="w-12 h-12 rounded-2xl bg-emerald-600 dark:bg-emerald-700 text-white flex items-center justify-center shrink-0 group-hover:scale-110 transition-all">
+                  <FileCheck size={24} strokeWidth={2.5} />
                 </div>
-                <p className="text-sm font-medium text-white leading-relaxed flex-1">
-                  Dana disalurkan langsung ke penerima dengan potongan biaya operasional jaringan yang terbuka.
-                </p>
+                <div>
+                  <div className="text-[10px] font-black text-emerald-100/70 dark:text-emerald-300/70 uppercase tracking-widest">Langkah 03</div>
+                  <h3 className="font-bold text-white text-sm">Verifikasi Ketat</h3>
+                </div>
               </div>
+              
+              <p className="text-sm text-emerald-50 dark:text-emerald-100 leading-relaxed flex-1 relative z-10">
+                Berkas penerima divalidasi langsung oleh pihak berwenang terkait secara terpusat.
+              </p>
+            </div>
+
+            {/* Step 4 - Dark */}
+            <div className="relative group bg-emerald-700 dark:bg-emerald-700 border border-emerald-800 dark:border-emerald-600 rounded-3xl p-6 shadow-md hover:shadow-xl hover:bg-emerald-600 dark:hover:bg-emerald-600 transition-all duration-300 flex flex-col text-white">
+              <div className="absolute top-0 right-0 w-24 h-24 bg-gradient-to-bl from-white/10 rounded-bl-[100px] rounded-tr-3xl z-0 group-hover:from-white/20 transition-colors"></div>
+              
+              <div className="flex items-center space-x-3 mb-5 relative z-10">
+                <div className="w-12 h-12 rounded-2xl bg-emerald-800 dark:bg-emerald-600 text-white flex items-center justify-center shrink-0 group-hover:scale-110 transition-all">
+                  <ShieldCheck size={24} strokeWidth={2.5} />
+                </div>
+                <div>
+                  <div className="text-[10px] font-black text-emerald-200/70 dark:text-emerald-200/70 uppercase tracking-widest">Langkah 04</div>
+                  <h3 className="font-bold text-white text-sm">Menjaga Privasi</h3>
+                </div>
+              </div>
+              
+              <p className="text-sm text-emerald-100 dark:text-emerald-50 leading-relaxed flex-1 relative z-10">
+                Verifikasi digital menjaga privasi identitas nama asli penerima agar tetap rahasia.
+              </p>
+            </div>
+
+            {/* Step 5 - Darkest */}
+            <div className="relative group bg-slate-900 dark:bg-slate-900 border border-slate-800 dark:border-emerald-900 rounded-3xl p-6 shadow-md hover:shadow-xl hover:bg-slate-800 dark:hover:bg-slate-800 transition-all duration-300 flex flex-col text-white">
+              <div className="absolute top-0 right-0 w-24 h-24 bg-gradient-to-bl from-emerald-500/10 rounded-bl-[100px] rounded-tr-3xl z-0 group-hover:from-emerald-500/20 transition-colors"></div>
+              
+              <div className="flex items-center space-x-3 mb-5 relative z-10">
+                <div className="w-12 h-12 rounded-2xl bg-emerald-900 dark:bg-emerald-800 text-emerald-400 flex items-center justify-center shrink-0 group-hover:scale-110 transition-all">
+                  <Coins size={24} strokeWidth={2.5} />
+                </div>
+                <div>
+                  <div className="text-[10px] font-black text-emerald-600 dark:text-emerald-500 uppercase tracking-widest">Langkah 05</div>
+                  <h3 className="font-bold text-white text-sm">Transparan</h3>
+                </div>
+              </div>
+              
+              <p className="text-sm text-slate-300 dark:text-emerald-100/70 leading-relaxed flex-1 relative z-10">
+                Dana disalurkan langsung ke penerima dengan potongan biaya jaringan yang terbuka.
+              </p>
             </div>
           </div>
         </div>
@@ -562,7 +623,7 @@ export default function LandingPage({ onLoginClick }) {
       {/* ================= FITUR UNGGULAN ================= */}
       <section id="keunggulan" className="py-10 bg-slate-50 dark:bg-slate-950">
         <div className="my-8 border-t border-slate-200 dark:border-slate-800"></div>
-        <div className="max-w-7xl px-4 sm:px-6 lg:px-8 mx-auto">
+        <div className="max-w-[1440px] px-4 sm:px-6 lg:px-8 mx-auto">
           <div className="text-center max-w-5xl mx-auto mb-16 space-y-3">
             <h2 className="text-3xl sm:text-4xl lg:text-4xl font-extrabold text-slate-900 dark:text-white tracking-tight uppercase whitespace-nowrap">
               MENGAPA MEMILIH{" "}
@@ -686,7 +747,7 @@ export default function LandingPage({ onLoginClick }) {
       {/* ================= CAMPAIGN AKTIF ================= */}
       <section id="campaign" className="py-10 dark:bg-slate-950 transition-colors duration-300">
         <div className="my-8 border-t border-slate-200 dark:border-slate-800"></div>
-        <div className="max-w-7xl px-4 sm:px-6 lg:px-8 mx-auto">
+        <div className="max-w-[1440px] px-4 sm:px-6 lg:px-8 mx-auto">
           <div className="text-center max-w-5xl mx-auto mb-16 space-y-3">
             <h2 className="text-3xl sm:text-4xl font-extrabold text-slate-900 dark:text-white tracking-tight uppercase">
               PROGRAM DONASI <span className="text-emerald-600 dark:text-emerald-400">PILIHAN</span>
@@ -864,7 +925,7 @@ export default function LandingPage({ onLoginClick }) {
       {/* 2. SECTION UTAMA */}
       <section id="tentang-kami" className="py-10 bg-slate-50 dark:bg-slate-950 transition-colors duration-300">
         <div className="pt-16 border-t border-slate-200 dark:border-slate-800 mt-1 mb-4"></div>
-        <div className="max-w-7xl px-4 sm:px-6 lg:px-8 mx-auto">
+        <div className="max-w-[1440px] px-4 sm:px-6 lg:px-8 mx-auto">
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 lg:gap-16 items-center">
             
             {/* SISI KIRI: LOGO (Pure Foto) */}
@@ -1021,7 +1082,7 @@ export default function LandingPage({ onLoginClick }) {
       </div>
 
       {/* ================= CALL TO ACTION ================= */}
-      <section className="max-w-7xl px-4 sm:px-6 lg:px-8 mx-auto pb-20">
+      <section className="max-w-[1440px] px-4 sm:px-6 lg:px-8 mx-auto pb-20">
         <div className="bg-gradient-to-r from-emerald-700 to-emerald-900 rounded-3xl p-8 md:p-14 text-center text-white relative overflow-hidden shadow-2xl shadow-emerald-800/20">
           <div className="absolute top-0 right-0 w-48 h-48 bg-white/5 rounded-full blur-2xl -mr-10 -mt-10"></div>
           <div className="absolute bottom-0 left-0 w-64 h-64 bg-emerald-500/20 rounded-full blur-3xl -ml-20 -mb-20"></div>
@@ -1045,7 +1106,7 @@ export default function LandingPage({ onLoginClick }) {
 
       {/* ================= FOOTER ================= */}
       <footer className="bg-slate-900 text-slate-400 py-8 border-t border-slate-800">
-        <div className="max-w-7xl px-4 sm:px-6 lg:px-8 mx-auto flex flex-col sm:flex-row items-center justify-between gap-4 text-xs">
+        <div className="max-w-[1440px] px-4 sm:px-6 lg:px-8 mx-auto flex flex-col sm:flex-row items-center justify-between gap-4 text-xs">
           <div className="flex items-center space-x-2">
             <ShieldCheck size={16} className="text-emerald-500" />
             <span className="font-bold text-white">PhilanthropyChain</span>
@@ -1061,7 +1122,7 @@ export default function LandingPage({ onLoginClick }) {
       {authMode && (
         <div className="fixed inset-0 z-[100] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-white dark:bg-slate-900 rounded-[2rem] p-8 md:p-10 max-w-md w-full shadow-2xl border border-gray-100 dark:border-slate-800 relative transform transition-all">
-            <button onClick={() => setAuthMode(null)} className="absolute top-6 right-6 text-gray-400 hover:text-emerald-600 bg-gray-100 dark:bg-slate-800 p-2 rounded-full transition-colors">
+            <button onClick={() => { setAuthMode(null); setAuthError(null); }} className="absolute top-6 right-6 text-gray-400 hover:text-emerald-600 bg-gray-100 dark:bg-slate-800 p-2 rounded-full transition-colors">
               <X size={20} />
             </button>
             
@@ -1075,6 +1136,14 @@ export default function LandingPage({ onLoginClick }) {
             </div>
             
             <form onSubmit={handleAuthSubmit} className="space-y-4">
+
+              {/* Error Banner dari API */}
+              {authError && (
+                <div className="flex items-start gap-3 p-3.5 bg-rose-50 dark:bg-rose-900/20 border border-rose-200 dark:border-rose-800 rounded-xl">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-rose-500 shrink-0 mt-0.5"><circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="8" y2="12"/><line x1="12" x2="12.01" y1="16" y2="16"/></svg>
+                  <p className="text-xs font-semibold text-rose-700 dark:text-rose-300 leading-relaxed">{authError}</p>
+                </div>
+              )}
               
               {authMode === 'register' && (
                 <div className="space-y-1.5">
@@ -1144,9 +1213,23 @@ export default function LandingPage({ onLoginClick }) {
 
               <button 
                 type="submit" 
-                className="w-full py-3.5 mt-2 rounded-xl font-black text-white bg-emerald-600 hover:bg-emerald-700 active:scale-95 transition-all shadow-lg shadow-emerald-600/30 flex justify-center items-center gap-2"
+                disabled={isAuthLoading}
+                className="w-full py-3.5 mt-2 rounded-xl font-black text-white bg-emerald-600 hover:bg-emerald-700 active:scale-95 transition-all shadow-lg shadow-emerald-600/30 flex justify-center items-center gap-2 disabled:opacity-70 disabled:cursor-wait disabled:active:scale-100"
               >
-                {authMode === 'login' ? 'Masuk' : 'Daftar Sekarang'}
+                {isAuthLoading ? (
+                  <>
+                    <svg className="animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    Memproses...
+                  </>
+                ) : (
+                  <>
+                    <ShieldCheck size={16} />
+                    {authMode === 'login' ? 'Masuk' : 'Daftar Sekarang'}
+                  </>
+                )}
               </button>
 
             </form>

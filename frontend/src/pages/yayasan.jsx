@@ -86,7 +86,7 @@ const DashboardView = ({ campaigns, onAction }) => {
   const totalRecipients = campaigns.reduce((s, c) => s + c.recipients, 0);
 
   return (
-    <div className="space-y-6 max-w-6xl">
+    <div className="space-y-6 max-w-[1440px]">
       {/* Title */}
       <div>
         <p className="text-base font-medium text-gray-500 dark:text-slate-400 mt-1">Yayasan Ruang Peduli Bersama</p>
@@ -179,7 +179,7 @@ const DashboardView = ({ campaigns, onAction }) => {
    2) KELOLA PROGRAM / CAMPAIGN
    ================================================================ */
 const CampaignView = ({ campaigns, onCreateModal, onManage, onDistribute, onAction }) => (
-  <div className="space-y-6 max-w-6xl">
+  <div className="space-y-6 max-w-[1440px]">
     <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
       <div>
         <p className="text-base font-medium text-gray-600 dark:text-slate-400 mt-1">Kelola dan salurkan dana untuk program kemanusiaan yang aktif.</p>
@@ -398,7 +398,7 @@ const VerificationView = ({ queue, onVerify, onAction }) => {
   };
 
   return (
-    <div className="space-y-6 w-full max-w-7xl mx-auto">
+    <div className="space-y-6 w-full max-w-[1440px] mx-auto">
       <div>
         <p className="text-base font-medium text-gray-500 dark:text-slate-400 mt-1">Antrean alamat dompet anonim yang membawa bukti ZKP (Zero-Knowledge Proof).</p>
       </div>
@@ -705,7 +705,7 @@ const VerificationView = ({ queue, onVerify, onAction }) => {
    4) ALIRAN DANA — Deterministic Split Payment 95:5
    ================================================================ */
 const FundsView = ({ distributions, onAction }) => (
-  <div className="space-y-6 w-full max-w-7xl mx-auto">
+  <div className="space-y-6 w-full max-w-[1440px] mx-auto">
       <div>
         <p className="text-base font-medium text-gray-500 dark:text-slate-400 mt-1">Visualisasi Pembagian Dana & Transparansi Catatan</p>
       </div>
@@ -801,7 +801,7 @@ const FundsView = ({ distributions, onAction }) => (
    5) LAPORAN TRANSPARANSI — Audit Rekonsiliasi
    ================================================================ */
 const ReportsView = ({ auditData, onAction }) => (
-  <div className="space-y-6 max-w-6xl">
+  <div className="space-y-6 max-w-[1440px]">
     <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-6">
       <div>
         <p className="text-base font-medium text-gray-600 dark:text-slate-400 mt-2 max-w-2xl leading-relaxed">Verifikasi aset yayasan secara langsung. Catatan transparan ini memastikan setiap data sistem di luar jaringan cocok dengan data permanen di dalam sistem.</p>
@@ -864,7 +864,7 @@ const ReportsView = ({ auditData, onAction }) => (
                 <td className="py-6 px-6 text-sm font-mono text-gray-600 dark:text-slate-400">{r.on}</td>
                 <td className="py-6 px-6 text-center">
                   <span className="bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 text-[10px] font-extrabold px-4 py-2 rounded-full inline-flex flex-col items-center border border-emerald-100 dark:border-emerald-800 w-full max-w-[150px]">
-                    <span className="flex items-center gap-1"><CheckCircle size={12} /> COCOK (Permanen)</span>
+                    <span className="flex items-center gap-1"><CheckCircle size={12} /> COCOK </span>
                     <span className="font-medium text-[9px] mt-0.5">(Immutable)</span>
                   </span>
                 </td>
@@ -1055,7 +1055,7 @@ const YayasanPage = ({ onLogoutClick = () => {} }) => {
       <main className="flex-1 ml-[260px] min-w-0 bg-slate-50 dark:bg-slate-950">
         {/* HEADER FLUSH TO TOP */}
         <header className="bg-white dark:bg-slate-900 shadow-sm border-b border-gray-100 dark:border-slate-800 sticky top-0 z-30 transition-colors">
-          <div className="max-w-7xl mx-auto px-8 py-5 flex justify-between items-center w-full">
+          <div className="max-w-[1440px] mx-auto px-8 py-5 flex justify-between items-center w-full">
             <h2 className="text-xl md:text-2xl font-black uppercase tracking-wider text-emerald-900 dark:text-emerald-400">{activeMenu}</h2>
             <div className="flex items-center gap-3">
               <button onClick={() => setActiveMenu('Laporan')} className="p-2.5 rounded-full bg-gray-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-emerald-100 hover:text-emerald-600 transition relative">
@@ -1078,7 +1078,7 @@ const YayasanPage = ({ onLogoutClick = () => {} }) => {
           </div>
         </header>
 
-        <div className="p-8 lg:p-12 max-w-7xl mx-auto space-y-8">
+        <div className="p-8 lg:p-12 max-w-[1440px] mx-auto space-y-8">
           {activeMenu === 'Beranda'   && <DashboardView     campaigns={campaigns}   onAction={triggerAction} />}
           {activeMenu === 'Program'   && <CampaignView      campaigns={campaigns}   onCreateModal={() => setModal({ type: 'create' })} onManage={(c) => setModal({ type: 'manage', data: c })} onDistribute={handleDistribute} onAction={triggerAction} />}
           {activeMenu === 'Penerima'  && <VerificationView  queue={zkpQueue}        onVerify={handleVerify} onAction={triggerAction} />}

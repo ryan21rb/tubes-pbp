@@ -41,6 +41,8 @@ export default function PenerimaPage({ onLogoutClick = () => {} }) {
   const [showFormModal, setShowFormModal] = useState(false);
   const [formStep, setFormStep] = useState(1); 
   const [formData, setFormData] = useState({ kategori: "Ekonomi" });
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState(null);
   
   // Cek apakah user sudah punya pengajuan
   const myPengajuan = dataPengajuan.find(p => p.nik === userProfile.nik);
@@ -72,14 +74,33 @@ export default function PenerimaPage({ onLogoutClick = () => {} }) {
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
-  const submitPengajuan = () => {
-    ajukanBantuan({
-      nama: userProfile.name,
-      nik: userProfile.nik,
-      ...formData
-    });
-    setShowFormModal(false);
-    setFormStep(1);
+  const submitPengajuan = async (e) => {
+    if (e) e.preventDefault();
+    setIsSubmitting(true);
+    setSubmitError(null);
+
+    try {
+      // Ambil file dari form jika event dipassing (misal e.target.ktp)
+      const fileMap = {};
+      if (e && e.target) {
+        if (e.target.ktp && e.target.ktp.files[0]) fileMap.ktp = e.target.ktp.files[0];
+        if (e.target.sktm && e.target.sktm.files[0]) fileMap.sktm = e.target.sktm.files[0];
+      }
+
+      await ajukanBantuan({
+        nama: userProfile.name,
+        nik: userProfile.nik,
+        ...formData
+      }, fileMap);
+      
+      setShowFormModal(false);
+      setFormStep(1);
+    } catch (err) {
+      setSubmitError(err.message || 'Gagal mengirim pengajuan.');
+      alert(err.message || 'Gagal mengirim pengajuan.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const getCurrentStepIndex = () => {
@@ -136,7 +157,7 @@ export default function PenerimaPage({ onLogoutClick = () => {} }) {
         
         {/* HEADER FLUSH TO TOP */}
         <header className="bg-white dark:bg-slate-900 shadow-sm border-b border-gray-100 dark:border-slate-800 sticky top-0 z-30 transition-colors">
-          <div className="max-w-7xl mx-auto px-8 py-5 flex justify-between items-center w-full">
+          <div className="max-w-[1440px] mx-auto px-8 py-5 flex justify-between items-center w-full">
             <h2 className="text-xl md:text-2xl font-black uppercase tracking-wider text-emerald-900 dark:text-emerald-400">
               {activeTab === 'detail_program' ? 'Detail Program' : activeTab === 'status' ? 'Status Bantuan' : activeTab === 'profil' ? 'Profil & Pengaturan' : 'Beranda'}
             </h2>
@@ -164,7 +185,7 @@ export default function PenerimaPage({ onLogoutClick = () => {} }) {
           </div>
         </header>
 
-        <div className="p-8 lg:p-12 max-w-7xl mx-auto space-y-8">
+        <div className="p-8 lg:p-12 max-w-[1440px] mx-auto space-y-8">
         
         {/* ================= BERANDA ================= */}
         {activeTab === "beranda" && (

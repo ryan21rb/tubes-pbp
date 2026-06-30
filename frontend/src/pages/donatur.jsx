@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useContext } from 'react';
 import { PhilanthropyContext } from '../context/PhilanthropyContext';
+import { ethers } from 'ethers';
+import api from '../services/api';
 import logo from '../assets/logophilantrophy.png';
 import carousel1 from '../assets/carousel1.png';
 import carousel2 from '../assets/carousel2.png';
@@ -19,24 +21,8 @@ import { Home, Megaphone, History, User, LogOut, Wallet, Search,
 import { motion, AnimatePresence } from 'framer-motion';
 
 // ============================================================
-// DATA DUMMY SIMULASI
+// KONSTANTA TAG & HELPER (tetap statis, hanya untuk styling UI)
 // ============================================================
-const INITIAL_CAMPAIGNS = [
-  { id: 1, title: "Bantu Pejuang Kanker Cilik RSHS", tag: "Kesehatan", percent: 85, verified: true, target: "0.7", collected: "0.6", donors: 142, targetBeneficiaries: 50, daysLeft: 12, desc: "Bantu anak-anak pejuang kanker mendapatkan pengobatan yang layak di rumah sakit rujukan. Setiap donasi sangat berarti untuk kesembuhan mereka.", matchedBeneficiary: false, image: imgHealth, yayasan: "Yayasan Ruang Peduli Bersama" },
-  { id: 2, title: "Pembangunan Hunian Sementara Cianjur", tag: "Bencana", percent: 60, verified: true, target: "2.5", collected: "1.5", donors: 89, targetBeneficiaries: 200, daysLeft: 25, desc: "Membangun hunian sementara untuk korban bencana alam di wilayah terdampak. Mari pulihkan harapan mereka bersama.", matchedBeneficiary: false, image: imgDisaster, yayasan: "Yayasan Ruang Peduli Bersama" },
-  { id: 3, title: "Beasiswa Anak Pelosok Nusantara", tag: "Pendidikan", percent: 45, verified: true, target: "1.2", collected: "0.5", donors: 67, targetBeneficiaries: 100, daysLeft: 40, desc: "Program beasiswa untuk mahasiswa berprestasi dari daerah tertinggal agar tidak putus sekolah.", matchedBeneficiary: true, image: imgEducation, yayasan: "Yayasan Ruang Peduli Bersama" },
-  { id: 4, title: "Air Bersih untuk Desa Terpencil NTT", tag: "Sosial", percent: 30, verified: true, target: "1.8", collected: "0.5", donors: 54, targetBeneficiaries: 300, daysLeft: 55, desc: "Pembangunan infrastruktur sumur bor air bersih di desa-desa terpencil di NTT yang mengalami kekeringan.", matchedBeneficiary: false, image: imgSocial, yayasan: "Yayasan Ruang Peduli Bersama" },
-  { id: 5, title: "Bantuan Medis Sembuh Nusantara", tag: "Kesehatan", percent: 72, verified: true, target: "1.0", collected: "0.7", donors: 113, targetBeneficiaries: 75, daysLeft: 18, desc: "Program bantuan biaya medis untuk masyarakat tidak mampu di seluruh Indonesia.", matchedBeneficiary: false, image: imgHealth, yayasan: "Yayasan Ruang Peduli Bersama" },
-  { id: 6, title: "Rehab Sekolah Pasca Gempa Sulbar", tag: "Bencana", percent: 55, verified: true, target: "2.0", collected: "1.1", donors: 78, targetBeneficiaries: 150, daysLeft: 30, desc: "Rehabilitasi gedung sekolah yang rusak akibat gempa bumi di Sulawesi agar anak-anak bisa kembali belajar.", matchedBeneficiary: false, image: imgEducation, yayasan: "Yayasan Ruang Peduli Bersama" },
-  { id: 7, title: "Sembako Murah Warga Prasejahtera", tag: "Sosial", percent: 90, verified: true, target: "0.5", collected: "0.45", donors: 210, targetBeneficiaries: 500, daysLeft: 5, desc: "Distribusi paket sembako untuk keluarga prasejahtera dalam menghadapi lonjakan harga bahan pokok.", matchedBeneficiary: false, image: imgSocial, yayasan: "Yayasan Ruang Peduli Bersama" },
-];
-
-const PRAYERS_DATA = [
-  { id: 1, name: "Anonim", time: "8 menit lalu", text: "semangat semangat, semoga lekas sembuh adik-adik", aamiin: 3 },
-  { id: 2, name: "Hamba Allah", time: "15 menit lalu", text: "Semoga berkah untuk semua, amin ya rabbal alamin.", aamiin: 12 },
-  { id: 3, name: "Budi Santoso", time: "1 jam lalu", text: "Sedikit rezeki semoga bisa membantu beban saudara kita di sana.", aamiin: 5 },
-  { id: 4, name: "Anonim", time: "2 jam lalu", text: "Lekas pulih indonesiaku, sehat selalu orang baik.", aamiin: 8 },
-];
 
 const TAG_COLORS = {
   Kesehatan: { bg: "bg-emerald-50 dark:bg-emerald-900/30", text: "text-emerald-600 dark:text-emerald-400", border: "border-emerald-200 dark:border-emerald-800", dot: "bg-emerald-500", icon: <HeartHandshake size={14} /> },
@@ -499,16 +485,43 @@ const DetailCampaignView = ({ camp, userBalance, onBack, onAddActivity }) => {
 
   const isBalanceInsufficient = donateAmount && parseFloat(donateAmount) > userBalance;
 
-  const handleProcessDonation = () => {
+  const handleProcessDonation = async () => {
     setModalState('loading');
-    setTimeout(() => {
+    
+    try {
+      if (!window.ethereum) {
+        throw new Error("MetaMask tidak terdeteksi. Silakan install MetaMask.");
+      }
+
+      const provider = new ethers.BrowserProvider(window.ethereum);
+      const signer = await provider.getSigner();
+
+      // 1 & 2. Interaksi Smart Contract & MetaMask
+      // Mengirim ETH ke alamat Smart Contract atau Campaign Wallet
+      const tx = await signer.sendTransaction({
+        to: import.meta.env.VITE_DONATION_CONTRACT_ADDRESS || "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512",
+        value: ethers.parseEther(donateAmount.toString())
+      });
+
+      // Menunggu transaksi masuk block (mining)
+      await tx.wait();
+
+      // 3. Sinkronisasi Backend ke Laravel
+      await api.post('/api/v1/donations', {
+        programId: camp.id,
+        donateAmount: donateAmount,
+        txHash: tx.hash,
+        doa: doaText || ''
+      });
+
+      // 4. Update State UI
       setModalState('success');
       onAddActivity({
         id: Date.now(),
         type: 'donasi',
         text: `Anda baru saja berdonasi pada program ${camp.title} sebesar ETH ${donateAmount}`,
         date: new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' }),
-        IDTrx: '0x' + Math.random().toString(16).substr(2, 10)
+        IDTrx: tx.hash
       });
       if (doaText.trim()) {
         onAddActivity({
@@ -518,7 +531,24 @@ const DetailCampaignView = ({ camp, userBalance, onBack, onAddActivity }) => {
           date: new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })
         }, true);
       }
-    }, 2500);
+    } catch (error) {
+      console.error(error);
+      let errorMsg = "Transaksi gagal diproses.";
+      
+      // Penanganan Error (User denied, blockchain error, API error)
+      if (error.code === 4001 || error.message?.includes("User denied transaction signature") || error.message?.includes("user rejected")) {
+        errorMsg = "Transaksi dibatalkan oleh pengguna (User denied transaction signature).";
+      } else if (error.message?.includes("insufficient funds")) {
+        errorMsg = "Saldo tidak mencukupi untuk melakukan transaksi ini.";
+      } else if (error.response) {
+        errorMsg = "Transaksi di blockchain berhasil, namun gagal sinkronisasi ke server (API error).";
+      } else if (error.message) {
+        errorMsg = error.message;
+      }
+      
+      alert(errorMsg);
+      setModalState(null); // Tutup modal jika gagal agar user bisa mengulang
+    }
   };
 
   return (
@@ -688,25 +718,56 @@ const DonaturPage = ({ onLogoutClick = () => {} }) => {
   }, [isDarkMode]);
   const toggleTheme = () => setIsDarkMode(!isDarkMode);
 
-  const { dataPengajuan, dataProgram, walletAddress, unreadNotifs, markNotifsRead, ajukanBantuan, catatAktivitas } = useContext(PhilanthropyContext);
-  const campaigns = dataProgram.map(p => ({
+  // === CAMPAIGNS & PRAYERS dari PhilanthropyContext (data API) ===
+  const { dataPengajuan, dataProgram, dataDonatur, walletAddress, walletBalance,
+          unreadNotifs, markNotifsRead, ajukanBantuan, catatAktivitas,
+          isLoadingCampaigns, campaignsError, fetchCampaigns } = useContext(PhilanthropyContext);
+
+  // Map dataProgram (dari API) ke format yang dipakai komponen UI
+  const campaigns = (dataProgram || []).map(p => ({
     id: p.id,
-    title: p.judul,
-    tag: p.kategori,
-    percent: Math.min((p.terkumpul / p.targetDonasi) * 100, 100),
-    verified: true,
-    target: p.targetDonasi,
-    collected: p.terkumpul,
-    donors: p.penerimaTerdaftar,
-    targetBeneficiaries: p.targetPenerima,
-    daysLeft: p.status === 'Berjalan' ? 12 : 0,
-    desc: p.deskripsi,
+    title: p.judul || p.title || '',
+    tag: p.kategori || p.tag || 'Sosial',
+    percent: Math.min(((p.terkumpul || 0) / (p.targetDonasi || 1)) * 100, 100),
+    verified: p.isVerified !== false,
+    target: p.targetDonasi || 0,
+    collected: p.terkumpul || 0,
+    donors: p.penerimaTerdaftar || 0,
+    targetBeneficiaries: p.targetPenerima || 0,
+    daysLeft: p.sisaHari || (p.status === 'Berjalan' ? 12 : 0),
+    desc: p.deskripsi || '',
     matchedBeneficiary: false,
-    image: p.gambar,
-    yayasan: "Yayasan Philanthropy"
+    // Fallback gambar lokal berdasarkan kategori jika tidak ada image_url dari API
+    image: p.gambar || (() => {
+      const cat = (p.kategori || '').toLowerCase();
+      if (cat.includes('kesehatan')) return imgHealth;
+      if (cat.includes('bencana')) return imgDisaster;
+      if (cat.includes('pendidikan')) return imgEducation;
+      return imgSocial;
+    })(),
+    yayasan: p.namaYayasan || 'Yayasan Philanthropy Chain',
   }));
 
-  const [prayers, setPrayers] = useState(PRAYERS_DATA);
+  // Prayers/komentar dari dataDonatur yang diembed di campaigns
+  const [prayers, setPrayers] = useState([]);
+  const [prayersLoaded, setPrayersLoaded] = useState(false);
+
+  useEffect(() => {
+    if (dataDonatur && dataDonatur.length > 0 && !prayersLoaded) {
+      // Transform dataDonatur ke format prayers untuk UI
+      const mapped = dataDonatur.slice(0, 10).map(d => ({
+        id: d.id,
+        name: d.nama || 'Anonim',
+        time: d.waktu || 'Baru saja',
+        text: d.doa || '',
+        aamiin: d.aamiin || 0,
+      })).filter(p => p.text);
+      if (mapped.length > 0) {
+        setPrayers(mapped);
+        setPrayersLoaded(true);
+      }
+    }
+  }, [dataDonatur, prayersLoaded]);
   const handleAamiin = (id) => {
     setPrayers(prev => prev.map(p => p.id === id ? { ...p, aamiin: p.aamiin + 1 } : p));
   };
@@ -874,7 +935,7 @@ const DonaturPage = ({ onLogoutClick = () => {} }) => {
         
         {/* HEADER FLUSH TO TOP */}
         <header className="bg-white dark:bg-slate-900 shadow-sm border-b border-gray-100 dark:border-slate-800 sticky top-0 z-30 transition-colors">
-          <div className="max-w-7xl mx-auto px-8 py-5 flex justify-between items-center w-full">
+          <div className="max-w-[1440px] mx-auto px-8 py-5 flex justify-between items-center w-full">
             <h2 className="text-xl md:text-2xl font-black uppercase tracking-wider text-emerald-900 dark:text-emerald-400">
               {activeMenu}
             </h2>
@@ -902,7 +963,7 @@ const DonaturPage = ({ onLogoutClick = () => {} }) => {
           </div>
         </header>
 
-        <div className="p-8 lg:p-12 max-w-7xl mx-auto space-y-8">
+        <div className="p-8 lg:p-12 max-w-[1440px] mx-auto space-y-8">
           
           {activeMenu === 'Beranda' && (
             <BerandaView
@@ -937,7 +998,7 @@ const DonaturPage = ({ onLogoutClick = () => {} }) => {
               bookmarkedCampaigns={bookmarkedCampaigns}
               myDonatedCampaigns={myDonatedCampaigns}
               userPrayers={userPrayers}
-              campaigns={INITIAL_CAMPAIGNS}
+              campaigns={campaigns}
               onCampaignClick={setSelectedCampaignDetail}
               onToggleBookmark={handleToggleBookmark}
             />
