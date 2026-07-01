@@ -105,7 +105,7 @@ export default function LandingPage({ onLoginClick }) {
   const [isZoomed, setIsZoomed] = useState(false);
   const [authMode, setAuthMode] = useState(null); // null, 'login', 'register'
   const [walletConnected, setWalletConnected] = useState(false);
-  const [authForm, setAuthForm] = useState({ name: "", username: "", email: "", password: "", confirmPassword: "" });
+  const [authForm, setAuthForm] = useState({ name: '', email: '', password: '', confirmPassword: '', role: 'donatur', instansi_type: '' });
   const [isConnecting, setIsConnecting] = useState(false);
   const [isWalletBlinking, setIsWalletBlinking] = useState(false);
   // State khusus auth API
@@ -180,19 +180,19 @@ export default function LandingPage({ onLoginClick }) {
     }, 3000); 
   };
 
-  // Alur 2: Saat form di dalam Modal disubmit
-  // 1. Minta tanda tangan MetaMask (personal_sign)
-  // 2. Kirim payload ke Laravel API (login/register)
-  // 3. Simpan Sanctum token ke localStorage via context
-  // 4. Redirect ke dashboard sesuai role dari response API
+  // ================================================================
+  // HANDLE AUTH SUBMIT — Email + Password + Mandatory MetaMask Signature
+  // ================================================================
   const handleAuthSubmit = async (e) => {
     e.preventDefault();
-    if (!window.ethereum) return alert('MetaMask diperlukan untuk autentikasi.');
+    if (!window.ethereum) {
+      return alert('MetaMask diperlukan untuk melakukan autentikasi di PhilanthropyChain.');
+    }
     setAuthError(null);
     setIsAuthLoading(true);
 
     try {
-      // === LANGKAH 1: Minta akun & tanda tangan MetaMask ===
+      // === LANGKAH 1: Minta akun & tanda tangan MetaMask (Wajib) ===
       const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
       const address = accounts[0];
       const timestamp = new Date().getTime();
@@ -203,55 +203,55 @@ export default function LandingPage({ onLoginClick }) {
         params: [message, address],
       });
 
-      // === LANGKAH 2: Kirim ke Laravel Backend ===
+      // === LANGKAH 2: Kirim ke Laravel Backend (email + password) ===
       let response;
       if (authMode === 'register') {
-        // Payload register: sertakan data form + signature MetaMask
+        if (authForm.password !== authForm.confirmPassword) {
+          throw new Error('Password dan konfirmasi password tidak cocok.');
+        }
         const payload = {
-          name: authForm.name || authForm.username || '',
-          email: authForm.email || '',
-          password: authForm.password || '',
-          password_confirmation: authForm.confirmPassword || authForm.password || '',
-          wallet_address: address,
-          signature,
-          message,
+          name: authForm.name,
+          email: authForm.email,
+          password: authForm.password,
+          role: authForm.role || 'donatur',
+          instansi_type: authForm.role === 'instansi' ? authForm.instansi_type : null,
+          wallet_address: address, // Gunakan alamat MetaMask yang ditandatangani
         };
         response = await apiRegister(payload);
       } else {
-        // Payload login: cukup wallet_address + signature
         const payload = {
-          wallet_address: address,
-          signature,
-          message,
-          // Opsional: email/password jika backend butuh
-          ...(authForm.email && { email: authForm.email }),
-          ...(authForm.password && { password: authForm.password }),
+          email: authForm.email,
+          password: authForm.password,
         };
         response = await apiLogin(payload);
+        
+        // Handshake MetaMask: Pastikan wallet yang aktif sama dengan wallet yang terdaftar di database
+        const registeredWallet = response?.user?.wallet_address || response?.data?.user?.wallet_address;
+        if (registeredWallet && registeredWallet.toLowerCase() !== address.toLowerCase()) {
+          throw new Error(`Alamat MetaMask aktif (${address.substring(0, 6)}...) tidak cocok dengan wallet terdaftar untuk akun ini (${registeredWallet.substring(0, 6)}...). Silakan ganti akun MetaMask Anda terlebih dahulu.`);
+        }
       }
 
       // === LANGKAH 3: Ekstrak & simpan Sanctum token ===
-      const token = response?.token || response?.data?.token || response?.access_token;
-      const role = response?.role || response?.data?.role || response?.user?.role || 'donatur';
+      const token = response?.access_token || response?.token || response?.data?.token;
+      const role = response?.role || response?.user?.role || response?.data?.role || 'donatur';
+      const instansiType = response?.instansi_type || response?.user?.instansi_type || null;
 
       if (!token) {
         throw new Error('Server tidak mengembalikan token autentikasi. Pastikan backend berjalan.');
       }
 
-      // Simpan token ke localStorage & update context
-      localStorage.setItem('auth_token', token);
-      localStorage.setItem('user_role', role);
-      if (setAuthToken) setAuthToken(token, role);
+      // Simpan token, role, instansi_type ke localStorage & update context
+      if (setAuthToken) setAuthToken(token, role, instansiType);
 
       // Hubungkan wallet ke context juga
       if (connectWallet) await connectWallet();
 
       // === LANGKAH 4: Redirect berdasarkan role dari response API ===
-      // Backend Laravel menentukan role: 'yayasan', 'instansi', 'penerima', 'donatur'
       const roleLower = (role || '').toLowerCase();
       if (roleLower === 'yayasan') {
         window.location.hash = '#/yayasan';
-      } else if (roleLower === 'instansi' || roleLower === 'validator') {
+      } else if (roleLower === 'instansi') {
         window.location.hash = '#/instansi';
       } else if (roleLower === 'penerima') {
         window.location.hash = '#/penerima';
@@ -264,9 +264,7 @@ export default function LandingPage({ onLoginClick }) {
 
     } catch (error) {
       console.error('[handleAuthSubmit] Error:', error);
-      // Tampilkan pesan error yang informatif
       if (error.code === 4001) {
-        // User menolak tanda tangan di MetaMask
         setAuthError('Anda membatalkan tanda tangan MetaMask. Coba lagi untuk masuk.');
       } else {
         setAuthError(error.message || 'Autentikasi gagal. Periksa koneksi backend dan coba lagi.');
@@ -1160,30 +1158,16 @@ export default function LandingPage({ onLoginClick }) {
               )}
 
               <div className="space-y-1.5">
-                <label className="text-xs font-bold text-gray-500 dark:text-gray-400">Username</label>
+                <label className="text-xs font-bold text-gray-500 dark:text-gray-400">Email</label>
                 <input 
-                  type="text" 
+                  type="email" 
                   required
-                  value={authForm.username}
-                  onChange={(e) => setAuthForm({...authForm, username: e.target.value})}
+                  value={authForm.email}
+                  onChange={(e) => setAuthForm({...authForm, email: e.target.value})}
                   className="w-full p-3 rounded-xl border border-gray-200 dark:border-slate-700 dark:bg-slate-800 dark:text-white text-sm outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 transition-all" 
-                  placeholder="Masukkan username" 
+                  placeholder="nama@email.com" 
                 />
               </div>
-
-              {authMode === 'register' && (
-                <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-gray-500 dark:text-gray-400">Email</label>
-                  <input 
-                    type="email" 
-                    required
-                    value={authForm.email}
-                    onChange={(e) => setAuthForm({...authForm, email: e.target.value})}
-                    className="w-full p-3 rounded-xl border border-gray-200 dark:border-slate-700 dark:bg-slate-800 dark:text-white text-sm outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 transition-all" 
-                    placeholder="nama@email.com" 
-                  />
-                </div>
-              )}
 
               <div className="space-y-1.5">
                 <label className="text-xs font-bold text-gray-500 dark:text-gray-400">Password</label>

@@ -44,15 +44,32 @@ export default function ValidatorDashboard({ onLogoutClick = () => {} }) {
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [currentTime, setCurrentTime] = useState(Date.now());
 
-  // Mengunci identitas node aktif saat ini
-  const [profileName, setProfileName] = useState("Dinsos");
+  const context = useContext(PhilanthropyContext) || {};
+  const instansiTypeFromAuth = context.instansiType || localStorage.getItem('instansi_type');
+  
+  const typeMap = {
+    dinsos: "Dinsos",
+    diknas: "Disdik",
+    bpbd: "BPBD",
+    dinkes: "Dinkes"
+  };
+
+  const initialProfileName = typeMap[instansiTypeFromAuth] || "Dinsos";
+  const [profileName, setProfileName] = useState(initialProfileName);
   const [isEditingProfile, setIsEditingProfile] = useState(false);
-  const [editNameVal, setEditNameVal] = useState("Dinsos");
+  const [editNameVal, setEditNameVal] = useState(initialProfileName);
+
+  useEffect(() => {
+    if (instansiTypeFromAuth && typeMap[instansiTypeFromAuth]) {
+      setProfileName(typeMap[instansiTypeFromAuth]);
+      setEditNameVal(typeMap[instansiTypeFromAuth]);
+    }
+  }, [instansiTypeFromAuth]);
 
   // State real-time timestamp off untuk Node yang pasif
   const [nodeOfflineStartTimes] = useState({
-    Disdik: Date.now() - (1 * 60 * 1000), // 15 Menit lalu
-    BPBD: Date.now() - (1 * 60 * 60 * 1000), // 2 Jam lalu
+    Disdik: Date.now() - (15 * 60 * 1000), // 15 Menit lalu
+    BPBD: Date.now() - (2 * 60 * 60 * 1000), // 2 Jam lalu
     Dinkes: Date.now() - (24 * 60 * 60 * 1000) // 1 Hari lalu
   });
 

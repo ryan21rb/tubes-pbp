@@ -14,6 +14,7 @@ export const PhilanthropyProvider = ({ children }) => {
   // --- STATE AUTH ---
   const [apiToken, setApiToken] = useState(() => localStorage.getItem('auth_token'));
   const [userRole, setUserRole] = useState(() => localStorage.getItem('user_role'));
+  const [instansiType, setInstansiType] = useState(() => localStorage.getItem('instansi_type'));
 
   // --- STATE PENGAJUAN BANTUAN ---
   const [dataPengajuan, setDataPengajuan] = useState([]);
@@ -231,11 +232,17 @@ export const PhilanthropyProvider = ({ children }) => {
   // ============================================================
   // SIMPAN TOKEN SETELAH LOGIN (dipanggil dari LandingPage)
   // ============================================================
-  const setAuthToken = (token, role) => {
+  const setAuthToken = (token, role, instansiType = null) => {
     localStorage.setItem('auth_token', token);
     if (role) localStorage.setItem('user_role', role);
+    if (instansiType) {
+      localStorage.setItem('instansi_type', instansiType);
+    } else {
+      localStorage.removeItem('instansi_type');
+    }
     setApiToken(token);
     setUserRole(role);
+    setInstansiType(instansiType);
   };
 
   // ============================================================
@@ -249,8 +256,10 @@ export const PhilanthropyProvider = ({ children }) => {
     } finally {
       localStorage.removeItem('auth_token');
       localStorage.removeItem('user_role');
+      localStorage.removeItem('instansi_type');
       setApiToken(null);
       setUserRole(null);
+      setInstansiType(null);
       setDashboardStats(null);
       setWalletAddress('');
       setWalletBalance(0);
@@ -439,7 +448,7 @@ export const PhilanthropyProvider = ({ children }) => {
       dataDonatur, setDataDonatur,
       riwayatAktivitasGlobal,
       // Auth
-      apiToken, userRole, setAuthToken, logout,
+      apiToken, userRole, instansiType, setAuthToken, logout,
       // Wallet
       walletAddress, setWalletAddress, walletBalance, connectWallet,
       // Notifikasi
