@@ -4,6 +4,10 @@ import {
   apiUploadDocument,
   apiFetchDashboardStats,
   apiFetchCampaigns,
+  apiCreateCampaign,
+  apiFetchDocuments,
+  apiUpdateDocumentStatus,
+  apiVoteDocument,
   apiLogout,
 } from '../services/api';
 
@@ -38,6 +42,16 @@ export const PhilanthropyProvider = ({ children }) => {
   const [isLoadingStats, setIsLoadingStats] = useState(false);
   const [statsError, setStatsError] = useState(null);
 
+  // --- STATE NODE STATUSES (API Polling) ---
+  const [nodeStatuses, setNodeStatuses] = useState([]);
+  const VIP_NODES = [
+    '0x69e1db697b01d5bc54242011364cdbb141f1f990', // Dinas Sosial
+    '0x5a584e7d505ac812e6b095f6f5885884d2615aab', // Dinas Pendidikan
+    '0x6bbbf41d0decdc96bd44c14b953b31b9e9ae37bb', // BPBD
+    '0xab2bd36fa71777a23f87399212b782a96ee1256b', // Dinas Kesehatan
+    '0x92fb1524ce518cb9d7cf656f92422ac07868eaac', // Yayasan
+  ];
+
   // --- STATE KAMPANYE (dari API) ---
   const [isLoadingCampaigns, setIsLoadingCampaigns] = useState(false);
   const [campaignsError, setCampaignsError] = useState(null);
@@ -55,17 +69,17 @@ export const PhilanthropyProvider = ({ children }) => {
         id: c.id,
         judul: c.title,
         kategori: c.category,
-        deskripsi: c.deskripsi || c.description || '',
-        targetDonasi: parseFloat(c.target_donasi || c.target || 0),
-        terkumpul: parseFloat(c.terkumpul || c.collected || 0),
-        targetPenerima: parseInt(c.target_penerima || c.targetBeneficiaries || 0),
-        penerimaTerdaftar: parseInt(c.jumlah_donatur || c.donors || 0),
-        sisaHari: parseInt(c.sisa_hari || c.daysLeft || 0),
+        deskripsi: c.description || '',
+        targetDonasi: parseFloat(c.target_donation || 0),
+        terkumpul: parseFloat(c.collected_donation || 0),
+        targetPenerima: parseInt(c.target_penerima || 0),
+        penerimaTerdaftar: parseInt(c.jumlah_donatur || 0),
+        sisaHari: 30,
         status: c.status || 'Berjalan',
         gambar: c.image_url || null,
-        namaYayasan: c.nama_yayasan || c.foundation_name || '',
-        isVerified: c.is_verified || true,
-        danaTeralokasi: parseFloat(c.dana_teralokasi || 0),
+        namaYayasan: c.foundation_name || '',
+        isVerified: true,
+        danaTeralokasi: 0,
         // Data komentar/doa yang diembed dari API
         komentar: (c.comments || []).map(cm => ({
           id: cm.id,
@@ -97,6 +111,40 @@ export const PhilanthropyProvider = ({ children }) => {
   useEffect(() => {
     fetchCampaigns();
   }, [fetchCampaigns]);
+
+  // ============================================================
+  // FETCH PENGAJUAN BANTUAN DARI BACKEND (dokumen/document)
+  // ============================================================
+  const fetchDocuments = useCallback(async () => {
+    try {
+      const res = await apiFetchDocuments();
+      const docs = (res.data || []).map(d => ({
+        id: d.id,
+        nama: d.nama || '',
+        nik: d.nik || '',
+        kategori: d.kategori || '',
+        keterangan: d.keterangan || '',
+        walletAddress: d.wallet_address || '',
+        cid: d.ipfs_cid || '',
+        status: d.status || 'menunggu',
+        tahapBantuan: d.tahap_bantuan || 'Verifikasi Instansi',
+        signedNodes: d.signed_by || [],
+        rejectedNodes: d.rejected_by || [],
+        approvals: d.approvals || [],
+        totalResponses: d.total_responses || 0,
+        tanggalSistem: d.created_at ? new Date(d.created_at).toLocaleDateString('id-ID', { weekday: 'long' }) : '',
+        processingTimeMinutes: 10,
+      }));
+      setDataPengajuan(docs);
+    } catch (err) {
+      console.error('[fetchDocuments] Error:', err);
+    }
+  }, []);
+
+  // Fetch pengajuan saat app pertama dimuat
+  useEffect(() => {
+    fetchDocuments();
+  }, [fetchDocuments]);
 
   // ============================================================
   // FETCH DASHBOARD STATS (dipanggil setelah wallet connect + login)
@@ -193,6 +241,42 @@ export const PhilanthropyProvider = ({ children }) => {
       };
     }
   }, []);
+
+  // ============================================================
+  // POLLING NODE STATUS & HEARTBEAT
+  // ============================================================
+  useEffect(() => {
+    let intervalId;
+
+    const pollNodes = async () => {
+      try {
+        // Jika wallet yang konek adalah VIP, kirim heartbeat
+        if (walletAddress && VIP_NODES.includes(walletAddress.toLowerCase())) {
+          await fetch('http://localhost:8000/api/v1/nodes/heartbeat', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+            body: JSON.stringify({ wallet_address: walletAddress })
+          });
+        }
+        
+        // Ambil status terbaru
+        const res = await fetch('http://localhost:8000/api/v1/nodes/status', {
+           headers: { 'Accept': 'application/json' }
+        });
+        const json = await res.json();
+        if (json.status === 'success') {
+          setNodeStatuses(json.data);
+        }
+      } catch (err) {
+        console.error('[Polling Node] Error:', err);
+      }
+    };
+
+    pollNodes(); // eksekusi awal
+    intervalId = setInterval(pollNodes, 5000); // interval 5 detik
+
+    return () => clearInterval(intervalId);
+  }, [walletAddress]);
 
   // Fetch stats otomatis saat apiToken tersedia (setelah login)
   useEffect(() => {
@@ -339,9 +423,9 @@ export const PhilanthropyProvider = ({ children }) => {
         'Penerima'
       );
 
-      // === 4. CID siap dipakai untuk proses ZKP berikutnya ===
-      // CID merepresentasikan hash dokumen yang tersimpan di IPFS (Pinata)
-      // dan akan digunakan sebagai input untuk verifyPovertyStatus di Smart Contract
+      // === 4. Re-fetch documents agar Instansi & Yayasan langsung melihat data terbaru ===
+      try { await fetchDocuments(); } catch (_) {}
+
       console.info('[ZKP Ready] Document CID dari IPFS:', cid);
 
       return { id: newPengajuan.id, cid };
@@ -362,7 +446,8 @@ export const PhilanthropyProvider = ({ children }) => {
     setDataPengajuan(prev => prev.map(p => p.id === id ? { ...p, tahapBantuan: tahapBaru } : p));
   };
 
-  const updateStatusPengajuan = (id, newSignedNodes, newRejectedNodes, statusBaru) => {
+  const updateStatusPengajuan = async (id, newSignedNodes, newRejectedNodes, statusBaru, action, nodeName) => {
+    // Update state lokal dulu (agar UI langsung responsif)
     setDataPengajuan(prev => prev.map(p => {
       if (p.id === id) {
         let tahapBantuan = p.tahapBantuan;
@@ -371,13 +456,47 @@ export const PhilanthropyProvider = ({ children }) => {
       }
       return p;
     }));
+    // Sinkronisasi ke backend jika ada action & nodeName
+    if (action && nodeName && typeof id === 'number') {
+      try {
+        await apiUpdateDocumentStatus(id, { action, node_name: nodeName });
+      } catch (err) {
+        console.error('[updateStatusPengajuan] Gagal sync ke backend:', err);
+      }
+    }
   };
 
-  const tambahProgram = (programBaru) => {
-    setDataProgram(prev => {
-      const maxId = prev.reduce((max, p) => Math.max(max, typeof p.id === 'number' ? p.id : 0), 0);
-      return [{ id: maxId + 1, ...programBaru }, ...prev];
-    });
+  const voteDocument = async (id, walletAddress, voteStatus) => {
+    try {
+      const res = await apiVoteDocument(id, { wallet_address: walletAddress, vote_status: voteStatus });
+      await fetchDocuments();
+      return res;
+    } catch (err) {
+      console.error('[voteDocument] Gagal melakukan vote:', err);
+      throw err;
+    }
+  };
+
+  const tambahProgram = async (programBaru) => {
+    try {
+      const payload = {
+        title: programBaru.judul || programBaru.title,
+        description: programBaru.desc || programBaru.deskripsi || "Program Bantuan Ekonomi Kemanusiaan",
+        category: programBaru.kategori || programBaru.category,
+        target_donation: programBaru.targetDonasi || programBaru.target,
+        image_url: programBaru.image || null
+      };
+      await apiCreateCampaign(payload);
+      // Re-fetch all campaigns from backend to ensure data sync
+      await fetchCampaigns();
+    } catch (err) {
+      console.error("Gagal menyimpan program ke database:", err);
+      // Fallback update React state if backend fails
+      setDataProgram(prev => {
+        const maxId = prev.reduce((max, p) => Math.max(max, typeof p.id === 'number' ? p.id : 0), 0);
+        return [{ id: maxId + 1, ...programBaru }, ...prev];
+      });
+    }
   };
 
   const updateProgram = (id, updates) => {
@@ -450,18 +569,21 @@ export const PhilanthropyProvider = ({ children }) => {
       // Auth
       apiToken, userRole, instansiType, setAuthToken, logout,
       // Wallet
-      walletAddress, setWalletAddress, walletBalance, connectWallet,
+      walletAddress, setWalletAddress, walletBalance, connectWallet, VIP_NODES,
       // Notifikasi
       unreadNotifs, markNotifsRead,
       // Loading & error states
       isLoadingStats, statsError,
       isLoadingCampaigns, campaignsError,
+      // API status nodes
+      nodeStatuses,
       // Dashboard stats dari API
       dashboardStats,
       // Fungsi utama
       ajukanBantuan,
       updateTahapBantuan,
       updateStatusPengajuan,
+      voteDocument,
       tambahProgram,
       updateProgram,
       cairkanDana,
@@ -470,6 +592,7 @@ export const PhilanthropyProvider = ({ children }) => {
       klaimDanaPenerima,
       catatAktivitas,
       fetchCampaigns,
+      fetchDocuments,
       fetchDashboardStats,
       // Computed
       penerimaAddresses,

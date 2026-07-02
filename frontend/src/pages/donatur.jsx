@@ -11,14 +11,16 @@ import imgDisaster from '../assets/campaign_disaster.png';
 import imgEducation from '../assets/campaign_education.png';
 import imgSocial from '../assets/campaign_social.png';
 import { Home, Megaphone, History, User, LogOut, Wallet, Search,
-  CheckCircle, Calendar, Heart, ExternalLink, ArrowUpRight,
+  CheckCircle, Calendar, Heart, ExternalLink, ArrowUpRight, ArrowRight,
   ArrowDownLeft, Shield, Clock, Eye, Filter,
   ChevronDown, ChevronRight, Award, FileText, HandCoins, Coins,
   BadgeCheck, CircleDollarSign, Globe, AlertCircle, X, Loader2,
   ShieldCheck, Landmark, ChevronLeft, Droplet,
   HeartHandshake, BookOpen, Wind, MessageCircleHeart, Info,
-  Bookmark, Check, ImagePlus, Edit3, Bell, Settings, Plus, Sun, Moon } from "lucide-react";
+  Bookmark, Check, CheckCircle2, ImagePlus, Edit3, Bell, Settings, Plus, Sun, Moon } from "lucide-react";
 import { motion, AnimatePresence } from 'framer-motion';
+
+import { apiGetMyDocumentStatus } from '../services/api';
 
 // ============================================================
 // KONSTANTA TAG & HELPER (tetap statis, hanya untuk styling UI)
@@ -28,14 +30,14 @@ const TAG_COLORS = {
   Kesehatan: { bg: "bg-emerald-50 dark:bg-emerald-900/30", text: "text-emerald-600 dark:text-emerald-400", border: "border-emerald-200 dark:border-emerald-800", dot: "bg-emerald-500", icon: <HeartHandshake size={14} /> },
   Bencana: { bg: "bg-amber-50 dark:bg-amber-900/30", text: "text-amber-600 dark:text-amber-400", border: "border-amber-200 dark:border-amber-800", dot: "bg-amber-500", icon: <Wind size={14} /> },
   Pendidikan: { bg: "bg-blue-50 dark:bg-blue-900/30", text: "text-blue-600 dark:text-blue-400", border: "border-blue-200 dark:border-blue-800", dot: "bg-blue-500", icon: <BookOpen size={14} /> },
-  Sosial: { bg: "bg-teal-50 dark:bg-teal-900/30", text: "text-teal-600 dark:text-teal-400", border: "border-teal-200 dark:border-teal-800", dot: "bg-teal-500", icon: <Droplet size={14} /> },
+  Ekonomi: { bg: "bg-teal-50 dark:bg-teal-900/30", text: "text-teal-600 dark:text-teal-400", border: "border-teal-200 dark:border-teal-800", dot: "bg-teal-500", icon: <Droplet size={14} /> },
 };
 
 const VERIFIED_BY_MAPPING = {
   Kesehatan: "Dinas Kesehatan",
   Bencana: "BPBD",
   Pendidikan: "Dinas Pendidikan",
-  Sosial: "Dinas Sosial",
+  Ekonomi: "Dinas Sosial",
 };
 
 // ============================================================
@@ -84,7 +86,7 @@ const ImageCarousel = () => {
 // KOMPONEN: CAMPAIGN CARD
 // ============================================================
 const CampaignCard = ({ camp, isBookmarked, onToggleBookmark, onClick }) => {
-  const tagStyle = TAG_COLORS[camp.tag] || TAG_COLORS.Sosial;
+  const tagStyle = TAG_COLORS[camp.tag] || TAG_COLORS.Ekonomi;
 
   return (
     <motion.div
@@ -162,7 +164,7 @@ const BerandaView = ({ campaigns, onCampaignClick, setActiveMenu, bookmarkedCamp
     { name: "Kesehatan", icon: <HeartHandshake size={24} />, color: "text-rose-500 dark:text-rose-400", bg: "bg-rose-50 dark:bg-rose-900/30", borderColor: "border-rose-200 dark:border-rose-800" },
     { name: "Bencana", icon: <Wind size={24} />, color: "text-[#F5A623] dark:text-amber-400", bg: "bg-amber-50 dark:bg-amber-900/30", borderColor: "border-amber-200 dark:border-amber-800" },
     { name: "Pendidikan", icon: <BookOpen size={24} />, color: "text-blue-500 dark:text-blue-400", bg: "bg-blue-50 dark:bg-blue-900/30", borderColor: "border-blue-200 dark:border-blue-800" },
-    { name: "Sosial", icon: <Droplet size={24} />, color: "text-emerald-500 dark:text-emerald-400", bg: "bg-emerald-50 dark:bg-emerald-900/30", borderColor: "border-emerald-200 dark:border-emerald-800" }
+    { name: "Ekonomi", icon: <Droplet size={24} />, color: "text-emerald-500 dark:text-emerald-400", bg: "bg-emerald-50 dark:bg-emerald-900/30", borderColor: "border-emerald-200 dark:border-emerald-800" }
   ];
   const [favCategory, setFavCategory] = useState("Kesehatan");
   const favCampaigns = campaigns.filter(c => c.tag === favCategory).slice(0, 3);
@@ -465,13 +467,13 @@ const ProfilView = ({ userProfile, onEditProfile, bookmarkedCampaigns, myDonated
   );
 };
 
-// ============================================================
-// KOMPONEN: DETAIL CAMPAIGN VIEW
-// ============================================================
-const DetailCampaignView = ({ camp, userBalance, onBack, onAddActivity }) => {
+const DetailCampaignView = ({ camp, onBack, onDonateSuccess }) => {
+  const [activeTab, setActiveTab] = useState('about');
+  const [modalState, setModalState] = useState(null); // 'donate' | 'success' | null
+  const [alertMsg, setAlertMsg] = useState(null);
+  const context = useContext(PhilanthropyContext);
   const [donateAmount, setDonateAmount] = useState('');
   const [doaText, setDoaText] = useState('');
-  const [modalState, setModalState] = useState(null);
 
   useEffect(() => {
     document.body.style.overflow = 'hidden';
@@ -546,7 +548,7 @@ const DetailCampaignView = ({ camp, userBalance, onBack, onAddActivity }) => {
         errorMsg = error.message;
       }
       
-      alert(errorMsg);
+      setAlertMsg(errorMsg);
       setModalState(null); // Tutup modal jika gagal agar user bisa mengulang
     }
   };
@@ -700,6 +702,24 @@ const DetailCampaignView = ({ camp, userBalance, onBack, onAddActivity }) => {
           </div>
         )}
       </AnimatePresence>
+
+      {/* MODAL GLOBAL ALERT CAMPAIGN DETAIL */}
+      <AnimatePresence>
+        {alertMsg && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
+            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="bg-white dark:bg-slate-900 rounded-2xl w-full max-w-sm shadow-2xl border border-gray-100 dark:border-slate-800 overflow-hidden text-center">
+              <div className="p-6">
+                <div className="w-16 h-16 bg-blue-100 dark:bg-blue-900/50 text-blue-600 dark:text-blue-400 rounded-full flex items-center justify-center mx-auto mb-4 text-3xl">
+                  ℹ️
+                </div>
+                <h3 className="text-xl font-bold text-gray-900 dark:text-slate-100 mb-2">Informasi</h3>
+                <p className="text-gray-500 dark:text-slate-400 text-sm">{alertMsg}</p>
+              </div>
+              <button onClick={() => setAlertMsg(null)} className="w-full py-4 bg-blue-600 hover:bg-blue-700 text-white font-bold transition">Tutup</button>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };
@@ -709,6 +729,9 @@ const DetailCampaignView = ({ camp, userBalance, onBack, onAddActivity }) => {
 // ============================================================
 const DonaturPage = ({ onLogoutClick = () => {} }) => {
   const [isDarkMode, setIsDarkMode] = useState(false);
+  const [submissionStatus, setSubmissionStatus] = useState(null);
+  const [alertMsg, setAlertMsg] = useState(null);
+
   useEffect(() => {
     if (isDarkMode) {
       document.documentElement.classList.add("dark");
@@ -716,18 +739,55 @@ const DonaturPage = ({ onLogoutClick = () => {} }) => {
       document.documentElement.classList.remove("dark");
     }
   }, [isDarkMode]);
+
+  useEffect(() => {
+    const fetchMyStatus = async () => {
+      try {
+        const res = await apiGetMyDocumentStatus();
+        if (res?.data?.status === 'success' && res.data.data) {
+          setSubmissionStatus(res.data.data.status);
+        }
+      } catch (err) {
+        // fail silently for polling
+      }
+    };
+    
+    fetchMyStatus();
+    const interval = setInterval(fetchMyStatus, 5000);
+    return () => clearInterval(interval);
+  }, []);
   const toggleTheme = () => setIsDarkMode(!isDarkMode);
 
   // === CAMPAIGNS & PRAYERS dari PhilanthropyContext (data API) ===
-  const { dataPengajuan, dataProgram, dataDonatur, walletAddress, walletBalance,
-          unreadNotifs, markNotifsRead, ajukanBantuan, catatAktivitas,
-          isLoadingCampaigns, campaignsError, fetchCampaigns } = useContext(PhilanthropyContext);
+  const { 
+    dataPengajuan = [],
+    dataProgram, 
+    dataDonatur, 
+    walletAddress, 
+    walletBalance,
+    ajukanBantuan,
+    catatAktivitas,
+    unreadNotifs,
+    markNotifsRead,
+    isLoadingCampaigns, 
+    campaignsError, 
+    fetchCampaigns,
+    riwayatAktivitasGlobal = []
+  } = useContext(PhilanthropyContext) || {};
+
+  const [isSubmittingPengajuan, setIsSubmittingPengajuan] = useState(false);
+
+  useEffect(() => {
+    if (!dataProgram || dataProgram.length === 0) {
+      console.log("dataProgram is empty:", dataProgram);
+    }
+  }, [dataProgram]);
 
   // Map dataProgram (dari API) ke format yang dipakai komponen UI
   const campaigns = (dataProgram || []).map(p => ({
     id: p.id,
     title: p.judul || p.title || '',
-    tag: p.kategori || p.tag || 'Sosial',
+    tag: p.kategori || p.tag || 'Ekonomi',
     percent: Math.min(((p.terkumpul || 0) / (p.targetDonasi || 1)) * 100, 100),
     verified: p.isVerified !== false,
     target: p.targetDonasi || 0,
@@ -777,7 +837,8 @@ const DonaturPage = ({ onLogoutClick = () => {} }) => {
   const [showFormModal, setShowFormModal] = useState(false);
   const [formStep, setFormStep] = useState(1);
   const [formData, setFormData] = useState({ kategori: "Ekonomi" });
-  const programTersedia = dataProgram ? dataProgram.filter(p => p.kategori === formData.kategori && p.status === "Berjalan") : [];
+  const [fileData, setFileData] = useState({});
+  const programTersedia = dataProgram ? dataProgram.filter(p => (p.kategori === formData.kategori || p.category === formData.kategori) && p.status === "Berjalan") : [];
   
   const [showEditProfile, setShowEditProfile] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
@@ -805,18 +866,25 @@ const DonaturPage = ({ onLogoutClick = () => {} }) => {
     }
   };
 
-  const submitPengajuan = () => {
+  const submitPengajuan = async () => {
     if (ajukanBantuan) {
-      ajukanBantuan({
-        nama: userProfile.name,
-        nik: userProfile.nik,
-        ...formData
-      });
-      catatAktivitas("Pengajuan Bantuan", "Anda telah mengajukan bantuan.", "Donatur");
-      setBantuanStatus('pending');
+      try {
+        setIsSubmittingPengajuan(true);
+        await ajukanBantuan({
+          nama: userProfile.name,
+          nik: userProfile.nik,
+          ...formData
+        }, fileData);
+        catatAktivitas("Pengajuan Bantuan", "Anda telah mengajukan bantuan.", "Donatur");
+        setBantuanStatus('pending');
+        setShowFormModal(false);
+        setFormStep(1);
+      } catch (err) {
+        setAlertMsg(err.message || 'Gagal mengirim pengajuan.');
+      } finally {
+        setIsSubmittingPengajuan(false);
+      }
     }
-    setShowFormModal(false);
-    setFormStep(1);
   };
 
   const renderTopBar = (title) => (
@@ -1158,6 +1226,13 @@ const DonaturPage = ({ onLogoutClick = () => {} }) => {
                 {formStep === 2 && (
                   <div className="space-y-4">
                     <h4 className="text-sm font-bold text-slate-700 dark:text-slate-300 mb-4 border-b pb-2">Dokumen Spesifik Kategori {formData.kategori}</h4>
+
+                    <div className="bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-100 dark:border-emerald-800 p-3 rounded-xl mb-4 flex items-start gap-3">
+                      <ShieldCheck className="text-emerald-500 shrink-0 mt-0.5" size={16} />
+                      <p className="text-[10px] text-emerald-800 dark:text-emerald-300 leading-relaxed">
+                        <span className="font-bold">Keamanan Terdesentralisasi:</span> Status kelayakan Anda akan dicatat & diverifikasi secara <b className="text-emerald-600 dark:text-emerald-400">On-Chain di Hyperledger Besu</b>. Dokumen pendukung fisik dienkripsi & disimpan secara <b className="text-emerald-600 dark:text-emerald-400">Off-Chain di jaringan Pinata (IPFS)</b>.
+                      </p>
+                    </div>
                     
                     {formData.kategori === 'Ekonomi' && (
                       <>
@@ -1167,11 +1242,11 @@ const DonaturPage = ({ onLogoutClick = () => {} }) => {
                         <div className="bg-emerald-50 dark:bg-emerald-900/30 border border-emerald-100 dark:border-emerald-800 p-4 rounded-xl space-y-3 mt-4">
                           <p className="text-xs font-bold text-emerald-800 dark:text-emerald-400">Upload Dokumen Pendukung</p>
                           <label className="block text-[10px] text-gray-500 font-bold uppercase">Foto KTP Pemohon</label>
-                          <input type="file" required className="w-full text-xs" />
+                          <input type="file" name="ktp" onChange={(e) => setFileData({...fileData, ktp: e.target.files[0]})} required className="w-full text-xs" />
                           <label className="block text-[10px] text-gray-500 font-bold uppercase mt-2">Surat SKTM Asli</label>
-                          <input type="file" required className="w-full text-xs" />
+                          <input type="file" name="sktm" onChange={(e) => setFileData({...fileData, sktm: e.target.files[0]})} required className="w-full text-xs" />
                           <label className="block text-[10px] text-gray-500 font-bold uppercase mt-2">Slip Gaji / Surat Pernyataan Pendapatan</label>
-                          <input type="file" required className="w-full text-xs" />
+                          <input type="file" name="slip_gaji" onChange={(e) => setFileData({...fileData, slip_gaji: e.target.files[0]})} required className="w-full text-xs" />
                         </div>
                       </>
                     )}
@@ -1183,11 +1258,11 @@ const DonaturPage = ({ onLogoutClick = () => {} }) => {
                         <div className="bg-emerald-50 dark:bg-emerald-900/30 border border-emerald-100 dark:border-emerald-800 p-4 rounded-xl space-y-3 mt-4">
                           <p className="text-xs font-bold text-emerald-800 dark:text-emerald-400">Upload Bukti Bencana</p>
                           <label className="block text-[10px] text-gray-500 font-bold uppercase">Foto Kerusakan Radius</label>
-                          <input type="file" required className="w-full text-xs" />
+                          <input type="file" name="foto_kerusakan" onChange={(e) => setFileData({...fileData, foto_kerusakan: e.target.files[0]})} required className="w-full text-xs" />
                           <label className="block text-[10px] text-gray-500 font-bold uppercase mt-2">Foto Bukti Fisik / Korban</label>
-                          <input type="file" required className="w-full text-xs" />
+                          <input type="file" name="bukti_fisik" onChange={(e) => setFileData({...fileData, bukti_fisik: e.target.files[0]})} required className="w-full text-xs" />
                           <label className="block text-[10px] text-gray-500 font-bold uppercase mt-2">Surat Keterangan Bencana Desa</label>
-                          <input type="file" required className="w-full text-xs" />
+                          <input type="file" name="suket_bencana" onChange={(e) => setFileData({...fileData, suket_bencana: e.target.files[0]})} required className="w-full text-xs" />
                         </div>
                       </>
                     )}
@@ -1199,11 +1274,11 @@ const DonaturPage = ({ onLogoutClick = () => {} }) => {
                         <div className="bg-emerald-50 dark:bg-emerald-900/30 border border-emerald-100 dark:border-emerald-800 p-4 rounded-xl space-y-3 mt-4">
                           <p className="text-xs font-bold text-emerald-800 dark:text-emerald-400">Upload Rekam Medis</p>
                           <label className="block text-[10px] text-gray-500 font-bold uppercase">Foto Rekam Medis</label>
-                          <input type="file" required className="w-full text-xs" />
+                          <input type="file" name="rekam_medis" onChange={(e) => setFileData({...fileData, rekam_medis: e.target.files[0]})} required className="w-full text-xs" />
                           <label className="block text-[10px] text-gray-500 font-bold uppercase mt-2">Surat Rujukan Dokter/RS</label>
-                          <input type="file" required className="w-full text-xs" />
+                          <input type="file" name="rujukan" onChange={(e) => setFileData({...fileData, rujukan: e.target.files[0]})} required className="w-full text-xs" />
                           <label className="block text-[10px] text-gray-500 font-bold uppercase mt-2">Nota Estimasi Biaya RS</label>
-                          <input type="file" required className="w-full text-xs" />
+                          <input type="file" name="nota_biaya" onChange={(e) => setFileData({...fileData, nota_biaya: e.target.files[0]})} required className="w-full text-xs" />
                         </div>
                       </>
                     )}
@@ -1215,9 +1290,9 @@ const DonaturPage = ({ onLogoutClick = () => {} }) => {
                         <div className="bg-emerald-50 dark:bg-emerald-900/30 border border-emerald-100 dark:border-emerald-800 p-4 rounded-xl space-y-3 mt-4">
                           <p className="text-xs font-bold text-emerald-800 dark:text-emerald-400">Upload Bukti Pendidikan</p>
                           <label className="block text-[10px] text-gray-500 font-bold uppercase">Surat Tagihan/Tunggakan Resmi</label>
-                          <input type="file" required className="w-full text-xs" />
+                          <input type="file" name="tagihan" onChange={(e) => setFileData({...fileData, tagihan: e.target.files[0]})} required className="w-full text-xs" />
                           <label className="block text-[10px] text-gray-500 font-bold uppercase mt-2">KHS / Raport Terakhir</label>
-                          <input type="file" required className="w-full text-xs" />
+                          <input type="file" name="khs" onChange={(e) => setFileData({...fileData, khs: e.target.files[0]})} required className="w-full text-xs" />
                         </div>
                       </>
                     )}
@@ -1252,17 +1327,69 @@ const DonaturPage = ({ onLogoutClick = () => {} }) => {
 
                     <div className="flex gap-3 pt-4">
                       <button type="button" onClick={() => setFormStep(2)} className="flex-1 py-3 rounded-xl font-bold text-gray-600 bg-gray-100 hover:bg-gray-200 transition">Kembali</button>
-                      <button 
-                        type="submit" 
-                        disabled={!formData.programId}
-                        className={`flex-1 py-3 rounded-xl font-bold text-white transition flex items-center justify-center gap-2 ${formData.programId ? "bg-emerald-600 hover:bg-emerald-700 shadow-lg shadow-emerald-600/30" : "bg-gray-300 cursor-not-allowed"}`}
-                      >
-                        Ajukan Sekarang
-                      </button>
+                      {(() => {
+                        if (submissionStatus === 'menunggu') {
+                          return (
+                            <button disabled className="flex-1 py-3 rounded-xl font-bold text-white bg-yellow-500 opacity-80 cursor-not-allowed flex justify-center items-center gap-2">
+                              <Clock size={16}/> Menunggu Verifikasi
+                            </button>
+                          );
+                        } else if (submissionStatus === 'ditolak') {
+                          return (
+                            <button disabled className="flex-1 py-3 rounded-xl font-bold text-white bg-rose-600 opacity-80 cursor-not-allowed flex justify-center items-center gap-2">
+                              <AlertCircle size={16}/> Pengajuan Ditolak
+                            </button>
+                          );
+                        } else if (submissionStatus === 'disetujui') {
+                          return (
+                            <button type="button" onClick={() => window.location.hash = '#/penerima'} className="flex-1 py-3 rounded-xl font-bold text-white bg-emerald-600 hover:bg-emerald-700 shadow-lg shadow-emerald-600/30 transition flex justify-center items-center gap-2">
+                              Terverifikasi & Lihat Status Bantuan <ArrowRight size={16}/>
+                            </button>
+                          );
+                        } else {
+                          return (
+                            <button 
+                              type="submit" 
+                              disabled={!formData.programId || isSubmittingPengajuan}
+                              className={`flex-1 py-3 rounded-xl font-bold text-white transition flex items-center justify-center gap-2 ${formData.programId ? "bg-emerald-600 hover:bg-emerald-700 shadow-lg shadow-emerald-600/30" : "bg-gray-300 cursor-not-allowed"}`}
+                            >
+                              {isSubmittingPengajuan ? (
+                                <>
+                                  <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                  </svg>
+                                  Memproses...
+                                </>
+                              ) : (
+                                <>Selesai & Ajukan <CheckCircle2 size={16}/></>
+                              )}
+                            </button>
+                          );
+                        }
+                      })()}
                     </div>
                   </div>
                 )}
               </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* MODAL GLOBAL ALERT DONATUR PAGE */}
+      <AnimatePresence>
+        {alertMsg && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
+            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="bg-white dark:bg-slate-900 rounded-2xl w-full max-w-sm shadow-2xl border border-gray-100 dark:border-slate-800 overflow-hidden text-center">
+              <div className="p-6">
+                <div className="w-16 h-16 bg-blue-100 dark:bg-blue-900/50 text-blue-600 dark:text-blue-400 rounded-full flex items-center justify-center mx-auto mb-4 text-3xl">
+                  ℹ️
+                </div>
+                <h3 className="text-xl font-bold text-gray-900 dark:text-slate-100 mb-2">Informasi</h3>
+                <p className="text-gray-500 dark:text-slate-400 text-sm">{alertMsg}</p>
+              </div>
+              <button onClick={() => setAlertMsg(null)} className="w-full py-4 bg-blue-600 hover:bg-blue-700 text-white font-bold transition">Tutup</button>
             </motion.div>
           </div>
         )}

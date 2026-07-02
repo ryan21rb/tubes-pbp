@@ -34,7 +34,7 @@ class CampaignController extends Controller
             'description' => 'required|string',
             'category' => 'required|string|max:100',
             'target_donation' => 'required|numeric|min:0',
-            'image_url' => 'nullable|url',
+            'image_url' => 'nullable|string',
         ]);
 
         $campaign = Campaign::create([

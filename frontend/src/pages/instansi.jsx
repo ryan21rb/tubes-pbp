@@ -26,10 +26,10 @@ import {
 
 // DATA KONSISTEN DOMPET sistem TIAP Instansi Validator KONSORSIUM
 const NODE_IDENTITIES = {
-  Dinsos: { name: "Dinas Sosial", role: "Node 1", address: "0x08212C9a2FdB3E71c890123456789A1b2c34Fb3E" },
-  Disdik: { name: "Dinas Pendidikan", role: "Node 2", address: "0x9df2881b2A345CDE678pqr901stu234vwx567yz11A2" },
-  BPBD: { name: "BPBD", role: "Node 3", address: "0x4c3a567def789ghi012jkl345mno678pqr901stu88Eb" },
-  Dinkes: { name: "Dinas Kesehatan", role: "Node 4", address: "0x12b5zyx654wvu321tsr098qpo765nml432kji109hgf876edc543ba7a99" }
+  Dinsos: { name: "Dinas Sosial", role: "Node 1", address: "0x69e1db697b01d5bc54242011364cdbb141f1f990" },
+  Disdik: { name: "Dinas Pendidikan", role: "Node 2", address: "0x5a584e7d505ac812e6b095f6f5885884d2615aab" },
+  BPBD: { name: "BPBD", role: "Node 3", address: "0x6bbbf41d0decdc96bd44c14b953b31b9e9ae37bb" },
+  Dinkes: { name: "Dinas Kesehatan", role: "Node 4", address: "0xab2bd36fa71777a23f87399212b782a96ee1256b" }
 };
 
 export default function ValidatorDashboard({ onLogoutClick = () => {} }) {
@@ -43,6 +43,7 @@ export default function ValidatorDashboard({ onLogoutClick = () => {} }) {
   const [hoveredPoint, setHoveredPoint] = useState(null);
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [currentTime, setCurrentTime] = useState(Date.now());
+  const [alertMsg, setAlertMsg] = useState(null);
 
   const context = useContext(PhilanthropyContext) || {};
   const instansiTypeFromAuth = context.instansiType || localStorage.getItem('instansi_type');
@@ -80,16 +81,28 @@ export default function ValidatorDashboard({ onLogoutClick = () => {} }) {
   }, []);
 
   // ====== DATA MASTER STATE JALUR PIPELINE (100% REAL & DINAMIS) ======
-  const { dataPengajuan = [], updateStatusPengajuan, riwayatAktivitasGlobal = [], catatAktivitas } = useContext(PhilanthropyContext) || {};
+  const { dataPengajuan = [], updateStatusPengajuan, voteDocument, fetchDocuments, riwayatAktivitasGlobal = [], catatAktivitas, walletAddress, nodeStatuses } = useContext(PhilanthropyContext) || {};
 
   // LOCAL STATE WRAPPER: Agar UI langsung berubah cepat saat tombol diklik tanpa nunggu delay context
   const [localPengajuan, setLocalPengajuan] = useState([]);
   
   useEffect(() => {
-    if (dataPengajuan.length > 0) {
-      
+    // Sinkronisasi localPengajuan dari dataPengajuan Context (sumber data dari backend)
+    setLocalPengajuan(dataPengajuan);
+    if (selectedPengajuan) {
+      const updated = dataPengajuan.find(p => p.id === selectedPengajuan.id);
+      if (updated) setSelectedPengajuan(updated);
     }
   }, [dataPengajuan]);
+
+  useEffect(() => {
+    if (fetchDocuments) {
+      const interval = setInterval(() => {
+        fetchDocuments();
+      }, 5000);
+      return () => clearInterval(interval);
+    }
+  }, [fetchDocuments]);
 
   useEffect(() => {
     if (isDarkMode) {
@@ -182,57 +195,64 @@ export default function ValidatorDashboard({ onLogoutClick = () => {} }) {
     return `Terakhir ${diffDays} hari lalu`;
   };
 
-  const nodesStatus = [
-    { id: "Dinsos", name: "Node 1", sub: "Dinas Sosial", isSelf: profileName === "Dinsos", active: profileName === "Dinsos", timeMsg: profileName === "Dinsos" ? "Aktif" : formatDowntime("Disdik") },
-    { id: "Disdik", name: "Node 2", sub: "Dinas Pendidikan", isSelf: profileName === "Disdik", active: profileName === "Disdik", timeMsg: profileName === "Disdik" ? "Aktif" : formatDowntime("Disdik") },
-    { id: "BPBD", name: "Node 3", sub: "BPBD", isSelf: profileName === "BPBD", active: profileName === "BPBD", timeMsg: profileName === "BPBD" ? "Aktif" : formatDowntime("BPBD") },
-    { id: "Dinkes", name: "Node 4", sub: "Dinas Kesehatan", isSelf: profileName === "Dinkes", active: profileName === "Dinkes", timeMsg: profileName === "Dinkes" ? "Aktif" : formatDowntime("Dinkes") },
-  ];
+  const baseNodes = (nodeStatuses || []).filter(n => n.name.toLowerCase() !== 'yayasan ruang peduli bersama').map((n, i) => {
+    const isSelf = walletAddress && n.wallet_address.toLowerCase() === walletAddress.toLowerCase();
+    return {
+      id: n.name,
+      name: `Node ${i + 1}`,
+      sub: n.name,
+      isSelf: isSelf,
+      active: n.is_active,
+      timeMsg: n.is_active ? "Aktif" : n.last_seen_text
+    };
+  });
+  
+  // Sort: Node self (ANDA) selalu di urutan pertama
+  const nodesStatus = baseNodes.sort((a, b) => {
+    if (a.isSelf) return -1;
+    if (b.isSelf) return 1;
+    return 0;
+  });
 
   // LOGIKA AKSI REALTIME - TOLAK & SAHKAN (DENGAN LOADING)
-  const handleTolak = () => {
+  const handleTolak = async () => {
     if(!selectedPengajuan) return;
     setIsRejecting(true);
     
-    const currentDayName = new Date().toLocaleDateString("id-ID", { weekday: 'long' }); 
-
-    setTimeout(() => {
-      const newRejectedNodes = selectedPengajuan.rejectedNodes?.includes(profileName) ? selectedPengajuan.rejectedNodes : [...(selectedPengajuan.rejectedNodes || []), profileName];
-      const isRejected = newRejectedNodes.length >= 2;
-      const updatedStatus = isRejected ? "ditolak" : "menunggu";
-      const updatedItem = { ...selectedPengajuan, status: updatedStatus, rejectedNodes: newRejectedNodes, tanggalSistem: currentDayName };
-      
-      
-      
-      if(updateStatusPengajuan) updateStatusPengajuan(selectedPengajuan.id, selectedPengajuan.signedNodes || [], newRejectedNodes, updatedStatus);
-      if(catatAktivitas) catatAktivitas(`Penolakan Dokumen ${selectedPengajuan.id}`, `Penolakan berkas dicatat oleh Instansi ${NODE_IDENTITIES[profileName]?.name}.`, "Instansi");
-      
+    try {
+      if (voteDocument && walletAddress) {
+        await voteDocument(selectedPengajuan.id, walletAddress, 'rejected');
+        if (catatAktivitas) catatAktivitas("Validasi Dokumen", "Anda telah menolak dokumen.", profileName);
+        
+        // Instant state update & Auto-close modal
+        if (fetchDocuments) await fetchDocuments();
+        setSelectedPengajuan(null);
+      }
+    } catch (err) {
+      setAlertMsg("Gagal menyimpan vote: " + (err.message || 'Error dari server'));
+    } finally {
       setIsRejecting(false);
-      setSelectedPengajuan(null);
-    }, 800);
+    }
   };
 
-  const handleSahkan = () => {
+  const handleSahkan = async () => {
     if(!selectedPengajuan) return;
     setIsSigning(true);
     
-    const currentDayName = new Date().toLocaleDateString("id-ID", { weekday: 'long' }); 
-
-    setTimeout(() => {
-      const newSignedNodes = selectedPengajuan.signedNodes?.includes(profileName) ? selectedPengajuan.signedNodes : [...(selectedPengajuan.signedNodes || []), profileName];
-      const isFullySigned = newSignedNodes.length >= 4;
-      const newRejectedNodes = selectedPengajuan.rejectedNodes || [];
-      const newStatus = isFullySigned ? "disetujui" : selectedPengajuan.status;
-      const updatedItem = { ...selectedPengajuan, signedNodes: newSignedNodes, status: newStatus, tanggalSistem: currentDayName };
-      
-      
-
-      if(updateStatusPengajuan) updateStatusPengajuan(selectedPengajuan.id, newSignedNodes, newRejectedNodes, newStatus);
-      if(catatAktivitas) catatAktivitas(`Persetujuan Dokumen ${selectedPengajuan.id}`, `Persetujuan dokumen berhasil dicatat oleh Instansi ${NODE_IDENTITIES[profileName]?.name}.`, "Instansi");
-
+    try {
+      if (voteDocument && walletAddress) {
+        await voteDocument(selectedPengajuan.id, walletAddress, 'approved');
+        if (catatAktivitas) catatAktivitas("Validasi Dokumen", "Anda telah mensahkan dokumen.", profileName);
+        
+        // Instant state update & Auto-close modal
+        if (fetchDocuments) await fetchDocuments();
+        setSelectedPengajuan(null);
+      }
+    } catch (err) {
+      setAlertMsg("Gagal menyimpan vote: " + (err.message || 'Error dari server'));
+    } finally {
       setIsSigning(false);
-      setSelectedPengajuan(null);
-    }, 800);
+    }
   };
 
   return (
@@ -408,33 +428,33 @@ export default function ValidatorDashboard({ onLogoutClick = () => {} }) {
                 </div>
 
                 <div className="bg-white dark:bg-slate-900 p-8 rounded-3xl border border-gray-100 dark:border-slate-800 shadow-sm flex flex-col items-center text-center">
-  <h3 className="text-xs font-extrabold text-gray-500 uppercase tracking-widest mb-8 w-full text-left">Laporan Performa</h3>
-  
-  <div className="relative w-24 h-24 flex items-center justify-center mb-2">
-    <svg className="w-full h-full transform -rotate-90" viewBox="0 0 36 36">
-      <path className="text-gray-200 dark:text-slate-700" strokeWidth="3" stroke="currentColor" fill="none" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
-      <path className="text-emerald-700 dark:text-emerald-500" strokeWidth="3.2" strokeDasharray={`${persentasePersetujuan}, 100`} strokeLinecap="round" stroke="currentColor" fill="none" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
-    </svg>
-    <span className="absolute text-2xl font-black text-gray-800 dark:text-slate-200">{persentasePersetujuan}%</span>
-  </div>
-  <div className="mb-1">
-    <h4 className="text-sm font-bold text-gray-900 dark:text-slate-100 mb-1">Tingkat Persetujuan</h4>
-    <p className="text-xs text-gray-500 dark:text-slate-400">
-      <span className="text-emerald-600 font-bold">{berkasDisetujui} disetujui</span> / 
-      <span className="text-rose-500 font-bold ml-1">{berkasDitolak} ditolak</span>
-    </p>
-  </div>
-  <div className="grid grid-cols-2 gap-4 w-full mt-2">
-    <div className="bg-gray-50 dark:bg-slate-800/50 p-4 rounded-2xl border border-gray-100 dark:border-slate-800/50">
-      <p className="text-2xl font-black text-gray-800 dark:text-slate-200 font-mono">{totalBerkas}</p>
-      <p className="text-[10px] font-bold text-gray-400 uppercase mt-1">Total Verifikasi</p>
-    </div>
-    <div className="bg-gray-50 dark:bg-slate-800/50 p-4 rounded-2xl border border-gray-100 dark:border-slate-800/50">
-      <p className="text-2xl font-black text-gray-800 dark:text-slate-200 font-mono">{berkasSelesai}</p>
-      <p className="text-[10px] font-bold text-gray-400 uppercase mt-1">Selesai Diproses</p>
-    </div>
-  </div>
-</div>
+                  <h3 className="text-xs font-extrabold text-gray-500 uppercase tracking-widest mb-8 w-full text-left">Laporan Performa</h3>
+                  
+                  <div className="relative w-24 h-24 flex items-center justify-center mb-2">
+                    <svg className="w-full h-full transform -rotate-90" viewBox="0 0 36 36">
+                      <path className="text-gray-200 dark:text-slate-700" strokeWidth="3" stroke="currentColor" fill="none" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+                      <path className="text-emerald-700 dark:text-emerald-500" strokeWidth="3.2" strokeDasharray={`${persentasePersetujuan}, 100`} strokeLinecap="round" stroke="currentColor" fill="none" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+                    </svg>
+                    <span className="absolute text-2xl font-black text-gray-800 dark:text-slate-200">{persentasePersetujuan}%</span>
+                  </div>
+                  <div className="mb-1">
+                    <h4 className="text-sm font-bold text-gray-900 dark:text-slate-100 mb-1">Tingkat Persetujuan</h4>
+                    <p className="text-xs text-gray-500 dark:text-slate-400">
+                      <span className="text-emerald-600 font-bold">{berkasDisetujui} disetujui</span> / 
+                      <span className="text-rose-500 font-bold ml-1">{berkasDitolak} ditolak</span>
+                    </p>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4 w-full mt-2">
+                    <div className="bg-gray-50 dark:bg-slate-800/50 p-4 rounded-2xl border border-gray-100 dark:border-slate-800/50">
+                      <p className="text-2xl font-black text-gray-800 dark:text-slate-200 font-mono">{totalBerkas}</p>
+                      <p className="text-[10px] font-bold text-gray-400 uppercase mt-1">Total Verifikasi</p>
+                    </div>
+                    <div className="bg-gray-50 dark:bg-slate-800/50 p-4 rounded-2xl border border-gray-100 dark:border-slate-800/50">
+                      <p className="text-2xl font-black text-gray-800 dark:text-slate-200 font-mono">{berkasSelesai}</p>
+                      <p className="text-[10px] font-bold text-gray-400 uppercase mt-1">Selesai Diproses</p>
+                    </div>
+                  </div>
+                </div>
               </div>
 
               {/* Riwayat Aktivitas Section */}
@@ -531,9 +551,9 @@ export default function ValidatorDashboard({ onLogoutClick = () => {} }) {
                             <td className="py-6 px-4">
                               <div className="flex items-center justify-center gap-3">
                                 <div className="w-24 h-2.5 bg-gray-100 dark:bg-slate-800 rounded-full overflow-hidden">
-                                  <div className="h-full bg-emerald-600 dark:bg-emerald-500 transition-all duration-500 rounded-full" style={{ width: `${(respondedCount / 4) * 100}%` }} />
+                                  <div className="h-full bg-emerald-600 dark:bg-emerald-500 transition-all duration-500 rounded-full" style={{ width: `${((item.totalResponses ?? respondedCount) / 4) * 100}%` }} />
                                 </div>
-                                <span className="font-mono font-bold text-sm text-gray-600 dark:text-slate-400">{respondedCount}/4</span>
+                                <span className="font-mono font-bold text-sm text-gray-600 dark:text-slate-400">{item.totalResponses ?? respondedCount}/4</span>
                               </div>
                             </td>
                             <td className="py-6 px-4">
@@ -752,20 +772,31 @@ export default function ValidatorDashboard({ onLogoutClick = () => {} }) {
                   <div className="flex justify-between items-center text-sm">
                     <span className="font-bold text-gray-800 dark:text-slate-200 text-base">Status Otorisasi Rantai Kuorum</span>
                     <span className="font-mono font-black text-emerald-700 bg-emerald-50 dark:bg-emerald-900/30 px-3 py-1.5 rounded-lg border border-emerald-100 dark:border-emerald-800">
-                      {new Set([...(selectedPengajuan.signedNodes||[]), ...(selectedPengajuan.rejectedNodes || [])]).size}/4 Node
+                      {selectedPengajuan.totalResponses || 0}/4 Node
                     </span>
                   </div>
                   <div className="grid grid-cols-4 gap-3 text-xs font-bold text-center">
                     {["Dinsos", "Disdik", "BPBD", "Dinkes"].map((nodeKey) => {
-                      const isSigned = selectedPengajuan.signedNodes?.includes(nodeKey);
-                      const isRejected = selectedPengajuan.rejectedNodes?.includes(nodeKey);
+                      const nodeAddress = NODE_IDENTITIES[nodeKey]?.address?.toLowerCase();
+                      const approvalRecord = (selectedPengajuan.approvals || []).find(a => a.wallet_address === nodeAddress);
+                      const isSigned = approvalRecord?.status === 'approved' || selectedPengajuan.signedNodes?.includes(nodeKey);
+                      const isRejected = approvalRecord?.status === 'rejected' || selectedPengajuan.rejectedNodes?.includes(nodeKey);
+                      
                       let styleClass = "bg-gray-50 dark:bg-slate-800 text-gray-400 border-gray-100 dark:border-slate-700";
-                      if (isSigned) styleClass = "bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 border-emerald-200";
-                      if (isRejected) styleClass = "bg-rose-50 dark:bg-rose-900/20 text-rose-600 border-rose-200";
+                      let textNode = "Pending";
+                      
+                      if (isSigned) {
+                        styleClass = "bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 border-emerald-200";
+                        textNode = "Disahkan";
+                      } else if (isRejected) {
+                        styleClass = "bg-rose-50 dark:bg-rose-900/20 text-rose-600 border-rose-200";
+                        textNode = "Ditolak";
+                      }
+                      
                       return (
-                        <div key={nodeKey} className={`p-4 rounded-2xl border ${styleClass}`}>
-                          <p className="text-sm">{NODE_IDENTITIES[nodeKey].name.split(" ")[0]}</p>
-                          <p className="text-[10px] font-medium mt-1">{isSigned ? "Signed" : isRejected ? "Rejected" : "Pending"}</p>
+                        <div key={nodeKey} className={`p-2.5 rounded-xl border flex flex-col items-center justify-center transition-colors ${styleClass}`}>
+                          <span>{nodeKey}</span>
+                          <span className="text-[10px] font-medium mt-1">{textNode}</span>
                         </div>
                       );
                     })}
@@ -773,22 +804,38 @@ export default function ValidatorDashboard({ onLogoutClick = () => {} }) {
                 </div>
               </div>
 
-              {selectedPengajuan.status === "menunggu" && !(selectedPengajuan.rejectedNodes || []).includes(profileName) && !(selectedPengajuan.signedNodes || []).includes(profileName) ? (
-                <div className="mt-8 pt-6 border-t dark:border-slate-800 flex justify-end gap-3">
-                  <button onClick={handleTolak} disabled={isSigning || isRejecting} className="px-6 py-3 text-sm font-bold text-rose-600 bg-rose-50 hover:bg-rose-100 dark:bg-rose-900/30 dark:hover:bg-rose-900/50 rounded-xl transition disabled:opacity-50 flex items-center gap-2">
-                    {isRejecting && <span className="w-4 h-4 border-2 border-rose-600 border-t-transparent rounded-full animate-spin" />}
-                    {isRejecting ? "Memproses..." : "Tolak Pengajuan"}
-                  </button>
-                  <button onClick={handleSahkan} disabled={isSigning || isRejecting} className="px-8 py-3 text-sm font-extrabold text-white bg-emerald-700 dark:bg-emerald-600 hover:bg-emerald-800 dark:hover:bg-emerald-500 rounded-xl transition shadow-lg shadow-emerald-700/20 flex items-center gap-2 disabled:opacity-50">
-                    {isSigning && <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
-                    {isSigning ? "Memproses..." : "Sahkan Dokumen"}
-                  </button>
-                </div>
-              ) : (
-                <div className="mt-8 pt-6 border-t dark:border-slate-800">
-                  <div className="text-sm font-bold text-gray-400 text-center uppercase tracking-widest">Aksi Telah Dikunci Sistem</div>
-                </div>
-              )}
+              {(() => {
+                const hasVoted = (selectedPengajuan.approvals || []).some(a => a.wallet_address === walletAddress?.toLowerCase()) || 
+                                 selectedPengajuan.signedNodes?.includes(profileName) || 
+                                 selectedPengajuan.rejectedNodes?.includes(profileName);
+                
+                if (selectedPengajuan.status === "menunggu" && !hasVoted) {
+                  return (
+                    <div className="mt-8 pt-6 border-t dark:border-slate-800 flex justify-end gap-3">
+                      <button onClick={handleTolak} disabled={isSigning || isRejecting} className="px-6 py-3 text-sm font-bold text-rose-700 bg-rose-50 hover:bg-rose-100 rounded-xl transition flex items-center gap-2 disabled:opacity-50">
+                        {isRejecting && <span className="w-4 h-4 border-2 border-rose-600 border-t-transparent rounded-full animate-spin" />}
+                        {isRejecting ? "Memproses..." : "Tolak Pengajuan"}
+                      </button>
+                      <button onClick={handleSahkan} disabled={isSigning || isRejecting} className="px-8 py-3 text-sm font-extrabold text-white bg-emerald-700 dark:bg-emerald-600 hover:bg-emerald-800 dark:hover:bg-emerald-500 rounded-xl transition shadow-lg shadow-emerald-700/20 flex items-center gap-2 disabled:opacity-50">
+                        {isSigning && <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
+                        {isSigning ? "Memproses..." : "Sahkan Dokumen"}
+                      </button>
+                    </div>
+                  );
+                } else if (hasVoted) {
+                  return (
+                    <div className="mt-8 pt-6 border-t dark:border-slate-800">
+                      <div className="text-sm font-bold text-emerald-600 text-center uppercase tracking-widest">Suara Anda Telah Masuk</div>
+                    </div>
+                  );
+                } else {
+                  return (
+                    <div className="mt-8 pt-6 border-t dark:border-slate-800">
+                      <div className="text-sm font-bold text-gray-400 text-center uppercase tracking-widest">Aksi Telah Dikunci Sistem</div>
+                    </div>
+                  );
+                }
+              })()}
             </motion.div>
           </div>
         )}
@@ -873,6 +920,24 @@ export default function ValidatorDashboard({ onLogoutClick = () => {} }) {
     </div>
   )}
 </AnimatePresence>
+
+      {/* MODAL GLOBAL ALERT INSTANSI PAGE */}
+      <AnimatePresence>
+        {alertMsg && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
+            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="bg-white dark:bg-slate-900 rounded-2xl w-full max-w-sm shadow-2xl border border-gray-100 dark:border-slate-800 overflow-hidden text-center">
+              <div className="p-6">
+                <div className="w-16 h-16 bg-blue-100 dark:bg-blue-900/50 text-blue-600 dark:text-blue-400 rounded-full flex items-center justify-center mx-auto mb-4 text-3xl">
+                  ℹ️
+                </div>
+                <h3 className="text-xl font-bold text-gray-900 dark:text-slate-100 mb-2">Informasi</h3>
+                <p className="text-gray-500 dark:text-slate-400 text-sm">{alertMsg}</p>
+              </div>
+              <button onClick={() => setAlertMsg(null)} className="w-full py-4 bg-blue-600 hover:bg-blue-700 text-white font-bold transition">Tutup</button>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 </div>   
   );
 }

@@ -29,6 +29,7 @@ export default function PenerimaPage({ onLogoutClick = () => {} }) {
     return <div className="min-h-screen flex items-center justify-center">Loading context...</div>;
   }
   const { dataPengajuan, ajukanBantuan, dataProgram, dataDonatur, updateTahapBantuan, riwayatAktivitasGlobal, walletAddress, unreadNotifs, markNotifsRead, catatAktivitas } = context;
+  const [alertMsg, setAlertMsg] = useState(null);
 
   const [activeTab, setActiveTab] = useState("beranda");
   const [isDarkMode, setIsDarkMode] = useState(false);
@@ -97,7 +98,7 @@ export default function PenerimaPage({ onLogoutClick = () => {} }) {
       setFormStep(1);
     } catch (err) {
       setSubmitError(err.message || 'Gagal mengirim pengajuan.');
-      alert(err.message || 'Gagal mengirim pengajuan.');
+      setAlertMsg(err.message || 'Gagal mengirim pengajuan.');
     } finally {
       setIsSubmitting(false);
     }
@@ -105,15 +106,26 @@ export default function PenerimaPage({ onLogoutClick = () => {} }) {
 
   const getCurrentStepIndex = () => {
     if (!myPengajuan) return 1;
-    const stage = STAGES.find(s => s.label === myPengajuan.tahapBantuan);
-    return stage ? stage.id : 1;
+    const s = myPengajuan.status?.toLowerCase();
+    
+    // Pemetaan Status:
+    // SUBMITTED / menunggu -> Verifikasi Instansi (2)
+    // DISETUJUI -> Otentikasi Yayasan (3)
+    // ZKP_VALIDATED -> Cairkan Dana (4)
+    // FUND_DISTRIBUTED -> Selesai (5)
+    
+    if (s === 'menunggu' || s === 'submitted') return 2;
+    if (s === 'disetujui') return 3;
+    if (s === 'zkp_validated') return 4;
+    if (s === 'fund_distributed' || s === 'selesai') return 5;
+    
+    return 1;
   };
-
   const handleKlaimDana = () => {
     if (myPengajuan && myPengajuan.tahapBantuan === "Cairkan Dana") {
       updateTahapBantuan(myPengajuan.id, "Selesai");
       catatAktivitas("Klaim Dana", "Anda berhasil mengajukan klaim dana ke dompet Anda.", "Penerima");
-      alert("Permintaan pencairan sedang diproses sistem.");
+      setAlertMsg("Permintaan pencairan sedang diproses sistem.");
     }
   };
 
@@ -301,11 +313,17 @@ export default function PenerimaPage({ onLogoutClick = () => {} }) {
                   </div>
                   {STAGES.map((s, i) => {
                     const stepIdx = getCurrentStepIndex();
-                    const isCompleted = myPengajuan && s.id < stepIdx;
-                    const isActive = myPengajuan && s.id === stepIdx;
+                    const isCompleted = s.id < stepIdx;
+                    const isActive = s.id === stepIdx;
                     return (
                       <div key={s.id} className="relative z-10 flex flex-col items-center gap-3 w-20 md:w-28">
-                        <div className={`w-10 h-10 md:w-14 md:h-14 rounded-full flex items-center justify-center border-4 transition-all duration-500 ${isCompleted || isActive ? "bg-emerald-500 border-emerald-200 text-white shadow-lg shadow-emerald-500/40" : "bg-white dark:bg-slate-900 border-gray-200 dark:border-slate-700 text-gray-300"}`}>
+                        <div className={`w-10 h-10 md:w-14 md:h-14 rounded-full flex items-center justify-center border-4 transition-all duration-500 ${
+                          isCompleted 
+                            ? "bg-emerald-500 border-emerald-200 text-white shadow-lg shadow-emerald-500/40" 
+                            : isActive 
+                            ? "bg-emerald-500 border-emerald-300 text-white shadow-[0_0_20px_rgba(16,185,129,0.7)] animate-pulse"
+                            : "bg-white dark:bg-slate-900 border-gray-200 dark:border-slate-700 text-gray-300"
+                        }`}>
                           {isCompleted ? <Check size={24} strokeWidth={4} /> : <s.icon size={20} className={isActive ? "scale-110" : ""} />}
                         </div>
                         <p className={`text-[10px] md:text-xs text-center font-bold leading-tight ${isActive || isCompleted ? "text-emerald-700 dark:text-emerald-400" : "text-gray-400"}`}>{s.label}</p>
@@ -486,6 +504,24 @@ export default function PenerimaPage({ onLogoutClick = () => {} }) {
                 </div>
                 <button className="w-full bg-emerald-700 text-white font-bold py-3.5 mt-4 rounded-xl hover:bg-emerald-800 transition active:scale-95 shadow-lg shadow-emerald-700/20">Simpan Perubahan</button>
               </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* MODAL GLOBAL ALERT PENERIMA PAGE */}
+      <AnimatePresence>
+        {alertMsg && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
+            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="bg-white dark:bg-slate-900 rounded-2xl w-full max-w-sm shadow-2xl border border-gray-100 dark:border-slate-800 overflow-hidden text-center">
+              <div className="p-6">
+                <div className="w-16 h-16 bg-blue-100 dark:bg-blue-900/50 text-blue-600 dark:text-blue-400 rounded-full flex items-center justify-center mx-auto mb-4 text-3xl">
+                  ℹ️
+                </div>
+                <h3 className="text-xl font-bold text-gray-900 dark:text-slate-100 mb-2">Informasi</h3>
+                <p className="text-gray-500 dark:text-slate-400 text-sm">{alertMsg}</p>
+              </div>
+              <button onClick={() => setAlertMsg(null)} className="w-full py-4 bg-blue-600 hover:bg-blue-700 text-white font-bold transition">Tutup</button>
             </motion.div>
           </div>
         )}

@@ -97,10 +97,13 @@ export default function LandingPage({ onLoginClick }) {
   const context = useContext(PhilanthropyContext);
   const connectWallet = context?.connectWallet;
   const setAuthToken = context?.setAuthToken;
+  const VIP_NODES = context?.VIP_NODES || [];
+  const setWalletAddress = context?.setWalletAddress;
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [activeNav, setActiveNav] = useState("Beranda");
+  const [alertMsg, setAlertMsg] = useState(null);
   const [currentImage, setCurrentImage] = useState(0);
   const [isZoomed, setIsZoomed] = useState(false);
   const [authMode, setAuthMode] = useState(null); // null, 'login', 'register'
@@ -154,12 +157,32 @@ export default function LandingPage({ onLoginClick }) {
       try {
         setIsConnecting(true); // Animasi loading "Menunggu Konfirmasi..."
         
-        // Membuka pop-up Metamask untuk meminta izin koneksi akun
-        await window.ethereum.request({ method: 'eth_requestAccounts' });
+        // Membuka pop-up Metamask untuk meminta izin koneksi akun (FORCE POP-UP)
+        await window.ethereum.request({
+          method: 'wallet_requestPermissions',
+          params: [{ eth_accounts: {} }]
+        });
+        const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
+        const address = accounts[0].toLowerCase();
         
-        // Jika berhasil connect di Metamask, baru modal form muncul
-        setIsConnecting(false);
-        setAuthMode('login');
+        // Jika berhasil connect di Metamask, cek apakah dia VIP
+        if (VIP_NODES.includes(address)) {
+           // Login instan VIP (bypass auth form)
+           if (setWalletAddress) setWalletAddress(address);
+           if (connectWallet) await connectWallet();
+           
+           // Bypass routing (Instansi vs Yayasan)
+           if (address === '0x92fb1524ce518cb9d7cf656f92422ac07868eaac') {
+             window.location.hash = '#/yayasan';
+           } else {
+             window.location.hash = '#/instansi';
+           }
+           // Biarkan isConnecting=true agar spinner tidak hilang sampai pindah halaman
+        } else {
+           // Bukan VIP, munculkan form Login / Register (Tidak dipindah)
+           setIsConnecting(false);
+           setAuthMode('login');
+        }
         
       } catch (error) {
         // Jika user batal connect di Metamask
@@ -167,7 +190,7 @@ export default function LandingPage({ onLoginClick }) {
         setIsConnecting(false);
       }
     } else {
-      alert("Metamask belum terinstall! Silakan install ekstensi Metamask terlebih dahulu di browser Anda.");
+      setAlertMsg("Metamask belum terinstall! Silakan install ekstensi Metamask terlebih dahulu di browser Anda.");
     }
   };
 
@@ -186,7 +209,7 @@ export default function LandingPage({ onLoginClick }) {
   const handleAuthSubmit = async (e) => {
     e.preventDefault();
     if (!window.ethereum) {
-      return alert('MetaMask diperlukan untuk melakukan autentikasi di PhilanthropyChain.');
+      return setAlertMsg('MetaMask diperlukan untuk melakukan autentikasi di PhilanthropyChain.');
     }
     setAuthError(null);
     setIsAuthLoading(true);
@@ -630,7 +653,7 @@ export default function LandingPage({ onLoginClick }) {
               </span>
             </h2>
             <p className="text-slate-500 text-base">
-              Keunggulan teknologi terdepan untuk menghadirkan ekosistem donasi sosial paling kredibel.
+              Keunggulan teknologi terdepan untuk menghadirkan ekosistem donasi ekonomi paling kredibel.
             </p>
           </div>
 
@@ -822,7 +845,7 @@ export default function LandingPage({ onLoginClick }) {
               <div className="p-6 flex flex-col justify-between flex-1">
                 <div>
                   <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-4 line-clamp-2 leading-snug">
-                    🏥 Bantuan Peralatan Medis untuk Klinik Sosial
+                    Bantuan Peralatan Medis untuk Klinik Ekonomi
                   </h3>
 
                   <div className="flex justify-between items-end text-xs font-semibold mb-2">
@@ -952,10 +975,10 @@ export default function LandingPage({ onLoginClick }) {
 
               <div className="space-y-4 text-slate-600 dark:text-slate-300 dark:text-slate-300 text-base leading-relaxed">
                 <p>
-                  <span className="font-semibold text-slate-900 dark:text-white">PhilanthropyChain</span> adalah platform donasi transparan berbasis blockchain yang dirancang untuk menghubungkan donatur, lembaga sosial, dan penerima manfaat dalam satu ekosistem yang aman, terpercaya, dan akuntabel.
+                  <span className="font-semibold text-slate-900 dark:text-white">PhilanthropyChain</span> adalah platform donasi transparan berbasis blockchain yang dirancang untuk menghubungkan donatur, lembaga ekonomi, dan penerima manfaat dalam satu ekosistem yang aman, terpercaya, dan akuntabel.
                 </p>
                 <p>
-                  Dengan memanfaatkan teknologi blockchain, setiap proses donasi dapat dicatat secara transparan dan dapat ditelusuri, sehingga meningkatkan kepercayaan masyarakat terhadap penyaluran dana sosial.
+                  Dengan memanfaatkan teknologi blockchain, setiap proses donasi dapat dicatat secara transparan dan dapat ditelusuri, sehingga meningkatkan kepercayaan masyarakat terhadap penyaluran dana ekonomi.
                 </p>
               </div>
 
@@ -970,7 +993,7 @@ export default function LandingPage({ onLoginClick }) {
                   <div className="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm h-full flex flex-col">
                     <h4 className="text-sm font-bold text-emerald-700 mb-3 uppercase tracking-widest">Visi</h4>
                     <p className="text-sm text-slate-600 dark:text-slate-300 dark:text-slate-300 leading-relaxed flex-grow">
-                      Menjadi platform donasi digital terpercaya yang menghadirkan transparansi, keamanan, dan akuntabilitas dalam setiap proses penyaluran bantuan sosial.
+                      Menjadi platform donasi digital terpercaya yang menghadirkan transparansi, keamanan, dan akuntabilitas dalam setiap proses penyaluran bantuan ekonomi.
                     </p>
                   </div>
 
@@ -1090,7 +1113,7 @@ export default function LandingPage({ onLoginClick }) {
               Siap Menjadi Bagian dari Perubahan?
             </h2>
             <p className="text-emerald-100">
-              Bergabunglah bersama kami untuk menciptakan ekosistem sosial yang jujur, terbuka, dan berdampak nyata bagi mereka yang membutuhkan.
+              Bergabunglah bersama kami untuk menciptakan ekosistem ekonomi yang jujur, terbuka, dan berdampak nyata bagi mereka yang membutuhkan.
             </p>
             <button
               onClick={triggerWalletBlink}
@@ -1226,6 +1249,22 @@ export default function LandingPage({ onLoginClick }) {
                 {authMode === 'login' ? 'Belum punya akun? Daftar sekarang' : 'Sudah punya akun? Masuk di sini'}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL GLOBAL ALERT LANDING PAGE */}
+      {alertMsg && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm transition-opacity duration-300">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl w-full max-w-sm shadow-2xl border border-gray-100 dark:border-slate-800 overflow-hidden text-center transform transition-transform duration-300 scale-100">
+            <div className="p-6">
+              <div className="w-16 h-16 bg-blue-100 dark:bg-blue-900/50 text-blue-600 dark:text-blue-400 rounded-full flex items-center justify-center mx-auto mb-4 text-3xl">
+                ℹ️
+              </div>
+              <h3 className="text-xl font-bold text-gray-900 dark:text-slate-100 mb-2">Informasi</h3>
+              <p className="text-gray-500 dark:text-slate-400 text-sm">{alertMsg}</p>
+            </div>
+            <button onClick={() => setAlertMsg(null)} className="w-full py-4 bg-blue-600 hover:bg-blue-700 text-white font-bold transition">Tutup</button>
           </div>
         </div>
       )}

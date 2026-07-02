@@ -134,6 +134,9 @@ export const apiUploadDocument = async (formData) => {
 export const apiFetchCampaigns = () =>
   request('GET', '/campaigns');
 
+export const apiCreateCampaign = (payload) =>
+  request('POST', '/campaigns', payload);
+
 /**
  * Menambahkan komentar/doa ke sebuah kampanye.
  * @param {number} campaignId - ID kampanye
@@ -149,6 +152,41 @@ export const apiAddComment = (campaignId, payload) =>
  */
 export const apiAddReport = (campaignId, payload) =>
   request('POST', `/campaigns/${campaignId}/reports`, payload);
+
+// ============================================================
+// DOCUMENT PENGAJUAN ENDPOINTS
+// ============================================================
+
+/**
+ * Ambil daftar pengajuan bantuan (documents). Bisa difilter menggunakan query params.
+ * @param {Object} params - Query params (misal { status: 'disetujui' })
+ */
+export const apiFetchDocuments = (params = {}) => {
+  const query = new URLSearchParams(params).toString();
+  return request('GET', `/documents${query ? `?${query}` : ''}`);
+};
+
+/**
+ * Cek status dokumen terakhir milik user.
+ */
+export const apiGetMyDocumentStatus = () =>
+  request('GET', '/my-document/status');
+
+/**
+ * Update status pengajuan: TTD (sign) atau Tolak (reject) oleh Instansi.
+ * @param {number} id - ID dokumen
+ * @param {{ action: 'sign'|'reject', node_name: string }} payload
+ */
+export const apiUpdateDocumentStatus = (id, payload) =>
+  request('PATCH', `/documents/${id}/status`, payload);
+
+/**
+ * Node instansi memberikan persetujuan atau penolakan dokumen secara on-chain.
+ * @param {number} id - ID dokumen
+ * @param {{ wallet_address: string, vote_status: string }} payload
+ */
+export const apiVoteDocument = (id, payload) =>
+  request('POST', `/documents/${id}/vote`, payload);
 
 // ============================================================
 // DASHBOARD STATS

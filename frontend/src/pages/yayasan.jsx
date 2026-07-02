@@ -81,9 +81,25 @@ const ChartAnimation = () => {
 
 /* 1) BERANDA */
 const DashboardView = ({ campaigns, onAction }) => {
+  const { nodeStatuses = [] } = React.useContext(PhilanthropyContext) || {};
   const totalCollected = campaigns.reduce((s, c) => s + c.collected, 0);
   const activeCampaigns = campaigns.filter((c) => c.status === 'Aktif').length;
   const totalRecipients = campaigns.reduce((s, c) => s + c.recipients, 0);
+
+  const instansiNodes = (nodeStatuses || []).filter(n => n.name.toLowerCase() !== 'yayasan ruang peduli bersama');
+  const nodes = instansiNodes.length > 0 ? instansiNodes.map((n, i) => ({
+      name: `Node ${i + 1}`,
+      sub: n.name,
+      role: i === 0 ? 'LEADER' : 'FOLLOWER',
+      Icon: i === 0 ? Landmark : (i === 1 ? Building : Server),
+      isOnline: n.is_active,
+      lastActive: n.last_seen_text
+  })) : [
+      { name: 'Node 1', sub: 'Dinas Sosial', role: 'LEADER', Icon: Landmark, isOnline: true },
+      { name: 'Node 2', sub: 'Dinas Pendidikan', role: 'FOLLOWER', Icon: Building, isOnline: false, lastActive: '3 menit lalu' },
+      { name: 'Node 3', sub: 'BPBD', role: 'FOLLOWER', Icon: Server, isOnline: false, lastActive: '5 menit lalu' },
+      { name: 'Node 4', sub: 'Dinas Kesehatan', role: 'FOLLOWER', Icon: Server, isOnline: true },
+  ];
 
   return (
     <div className="space-y-6 max-w-[1440px]">
@@ -101,12 +117,7 @@ const DashboardView = ({ campaigns, onAction }) => {
           </span>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          {[
-            { name: 'Node 1', sub: 'Dinas Sosial', role: 'LEADER', Icon: Landmark, isOnline: true },
-            { name: 'Node 2', sub: 'Dinas Pendidikan', role: 'FOLLOWER', Icon: Building, isOnline: false, lastActive: '3 menit lalu' },
-            { name: 'Node 3', sub: 'BPBD', role: 'FOLLOWER', Icon: Server, isOnline: false, lastActive: '5 menit lalu' },
-            { name: 'Node 4', sub: 'Dinas Kesehatan', role: 'FOLLOWER', Icon: Server, isOnline: true },
-          ].map((n, i) => (
+          {nodes.map((n, i) => (
             <div
               key={i}
               className={`border border-gray-100 dark:border-slate-800 border-l-4 ${i === 0 ? 'border-l-emerald-600' : 'border-l-gray-300 dark:border-l-slate-700'} bg-white dark:bg-slate-900 p-4 rounded-xl flex items-center justify-between shadow-sm`}
@@ -130,7 +141,7 @@ const DashboardView = ({ campaigns, onAction }) => {
                   </p>
                 ) : (
                   <p className="text-[10px] text-gray-500 dark:text-slate-400 font-medium mt-1.5 flex items-center justify-end gap-1">
-                    <span className="w-1.5 h-1.5 bg-gray-400 rounded-full" /> Terakhir {n.lastActive}
+                    <span className="w-1.5 h-1.5 bg-gray-400 rounded-full" /> {n.lastActive || 'OFFLINE'}
                   </p>
                 )}
               </div>
@@ -260,6 +271,7 @@ const VerificationView = ({ queue, onVerify, onAction }) => {
   const context = React.useContext(PhilanthropyContext);
   const [verifying, setVerifying] = useState(null);
   const [activeItem, setActiveItem] = useState(null);
+  const [showDistributeZkp, setShowDistributeZkp] = useState(false);
   const [step, setStep] = useState(0);
   const [banner, setBanner] = useState(null);
   const [verifyMode, setVerifyMode] = useState(null); // null | 'select' | 'real' | 'simulation'
@@ -430,7 +442,7 @@ const VerificationView = ({ queue, onVerify, onAction }) => {
       <div className="w-full bg-white dark:bg-slate-900 rounded-[1.5rem] border border-gray-100 dark:border-slate-800 shadow-sm overflow-hidden">
         <div className="p-6 border-b border-gray-100 dark:border-slate-800 bg-gray-50 dark:bg-slate-800/50">
           <h3 className="text-xl font-bold text-gray-800 dark:text-slate-200">Daftar Antrean ZKP</h3>
-          <p className="text-l text-gray-500 dark:text-slate-400 mt-1">Data anonim dari Dinsos / Kelurahan yang siap disahkan on-chain.</p>
+          <p className="text-l text-gray-500 dark:text-slate-400 mt-1">Data anonim dari instansi yang siap disahkan on-chain.</p>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-left">
@@ -456,7 +468,7 @@ const VerificationView = ({ queue, onVerify, onAction }) => {
                         className="text-gray-400 dark:text-slate-500 cursor-pointer hover:text-emerald-600 dark:hover:text-emerald-400" 
                         onClick={() => {
                           navigator.clipboard.writeText(q.wallet);
-                          alert('Alamat dompet disalin!');
+                          setBanner('Alamat dompet disalin!');
                         }}
                       />
                     </td>
@@ -485,9 +497,12 @@ const VerificationView = ({ queue, onVerify, onAction }) => {
                         <span className="text-xs font-bold text-amber-600 dark:text-amber-400 animate-pulse">Memproses...</span>
                       )}
                       {verified && (
-                        <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400 flex items-center justify-end gap-1">
-                          <Check size={14} /> Selesai
-                        </span>
+                        <button
+                          onClick={() => { setActiveItem(q); setShowDistributeZkp(true); }}
+                          className="text-xs font-bold bg-amber-500 hover:bg-amber-600 text-white px-4 py-2 rounded-lg transition inline-flex items-center gap-1 shadow-md"
+                        >
+                          <Wallet size={14} /> Salurkan Dana
+                        </button>
                       )}
                     </td>
                   </tr>
@@ -524,6 +539,14 @@ const VerificationView = ({ queue, onVerify, onAction }) => {
                 </div>
                 <p className="text-xs text-gray-500 dark:text-slate-400 mt-1">
                   ID Pengajuan: <span className="font-mono font-bold text-emerald-700 dark:text-emerald-400">{activeItem.id}</span>
+                  <br />
+                  Dokumen IPFS (Pinata): {activeItem.cid ? (
+                    <a href={`https://gateway.pinata.cloud/ipfs/${activeItem.cid}`} target="_blank" rel="noopener noreferrer" className="font-mono font-bold text-blue-600 dark:text-blue-400 hover:underline">
+                      {activeItem.cid.substring(0, 8)}...{activeItem.cid.substring(activeItem.cid.length - 8)} <ExternalLink size={10} className="inline mb-0.5" />
+                    </a>
+                  ) : (
+                    <span className="font-mono font-bold text-gray-400">N/A</span>
+                  )}
                 </p>
               </div>
 
@@ -670,7 +693,7 @@ const VerificationView = ({ queue, onVerify, onAction }) => {
                           className="text-gray-400 dark:text-slate-500 hover:text-emerald-600 cursor-pointer"
                           onClick={() => {
                             navigator.clipboard.writeText(txHash);
-                            alert('Hash transaksi disalin!');
+                            setBanner('Hash transaksi disalin!');
                           }}
                         />
                       </div>
@@ -693,6 +716,64 @@ const VerificationView = ({ queue, onVerify, onAction }) => {
                 </div>
               )}
 
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* MODAL DISTRIBUSI DANA ZKP */}
+      <AnimatePresence>
+        {showDistributeZkp && activeItem && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
+            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="bg-white dark:bg-slate-900 rounded-2xl w-full max-w-lg shadow-2xl border border-gray-100 dark:border-slate-800 overflow-hidden">
+              <div className="p-6 border-b border-gray-100 dark:border-slate-800 flex justify-between items-center bg-gray-50 dark:bg-slate-800/50">
+                <h3 className="font-extrabold text-xl text-gray-800 dark:text-slate-100">Rincian Kalkulasi Distribusi</h3>
+                <button onClick={() => setShowDistributeZkp(false)} className="text-gray-400 hover:text-gray-600 p-2"><X size={20} /></button>
+              </div>
+              <div className="p-8 space-y-6">
+                {(() => {
+                  const totalDana = 50;
+                  const jumlahPenerima = 50;
+                  const feeOperasional = totalDana * 0.05;
+                  const danaBersih = totalDana - feeOperasional;
+                  const distribusiPerOrang = danaBersih / jumlahPenerima;
+                  
+                  return (
+                    <div className="space-y-4">
+                      <div className="flex justify-between border-b border-gray-100 dark:border-slate-800 pb-2">
+                        <span className="text-gray-500 dark:text-slate-400">Total Dana Terkumpul</span>
+                        <span className="font-bold">{totalDana} ETH</span>
+                      </div>
+                      <div className="flex justify-between border-b border-gray-100 dark:border-slate-800 pb-2">
+                        <span className="text-gray-500 dark:text-slate-400">Potongan Fee Operasional (5%)</span>
+                        <span className="font-bold text-rose-500">- {feeOperasional} ETH</span>
+                      </div>
+                      <div className="flex justify-between border-b border-gray-100 dark:border-slate-800 pb-2">
+                        <span className="text-gray-500 dark:text-slate-400">Dana Bersih (Net)</span>
+                        <span className="font-bold text-emerald-600">{danaBersih} ETH</span>
+                      </div>
+                      <div className="flex justify-between border-b border-gray-100 dark:border-slate-800 pb-2">
+                        <span className="text-gray-500 dark:text-slate-400">Jumlah Penerima Bantuan</span>
+                        <span className="font-bold">{jumlahPenerima} Orang</span>
+                      </div>
+                      <div className="flex justify-between bg-emerald-50 dark:bg-emerald-900/30 p-4 rounded-xl mt-4 border border-emerald-100 dark:border-emerald-800/50">
+                        <span className="text-emerald-800 dark:text-emerald-400 font-bold">Nominal Per Orang</span>
+                        <span className="font-black text-emerald-700 dark:text-emerald-300 text-lg">{distribusiPerOrang} ETH</span>
+                      </div>
+                    </div>
+                  );
+                })()}
+                <button 
+                  onClick={() => {
+                    console.log("Memanggil API/Smart Contract untuk menyalurkan dana ke:", activeItem);
+                    setShowDistributeZkp(false);
+                    setBanner("Dana berhasil didistribusikan! (Cek console log)");
+                  }}
+                  className="w-full bg-emerald-600 text-white font-bold py-4 rounded-xl hover:bg-emerald-700 transition flex items-center justify-center gap-2 shadow-lg shadow-emerald-600/30"
+                >
+                  <Wallet size={18} /> Konfirmasi Salurkan Dana
+                </button>
+              </div>
             </motion.div>
           </div>
         )}
@@ -899,7 +980,7 @@ const YayasanPage = ({ onLogoutClick = () => {} }) => {
 
   // ─── Campaign State ───
   const [campaigns, setCampaigns] = useState([
-    { id: 'C-001', title: 'Pembangunan Fasilitas Air Bersih Desa Cikaret', category: 'Sosial', target: 1.5, collected: 0.8, status: 'Aktif', distStatus: 'Pending', wallet: '0x8A2...981c', recipients: 100 },
+    { id: 'C-001', title: 'Pembangunan Fasilitas Air Bersih Desa Cikaret', category: 'Ekonomi', target: 1.5, collected: 0.8, status: 'Aktif', distStatus: 'Pending', wallet: '0x8A2...981c', recipients: 100 },
     { id: 'C-002', title: 'Bantuan Medis Darurat Korban Banjir Garut', category: 'Bencana', target: 50.0, collected: 50.0, status: 'Selesai', distStatus: 'Pending', wallet: '0x3Fb...22a0', recipients: 50 },
     { id: 'C-003', title: 'Beasiswa Teknologi Anak Bangsa 2024', category: 'Pendidikan', target: 80.0, collected: 25.6, status: 'Aktif', distStatus: 'Pending', wallet: '0x4F9...2E8d', recipients: 75 },
   ]);
@@ -907,6 +988,17 @@ const YayasanPage = ({ onLogoutClick = () => {} }) => {
   // ─── ZKP Queue State ───
   const context = React.useContext(PhilanthropyContext);
   const dataPengajuan = context?.dataPengajuan || [];
+  
+  // Polling data ZKP dari backend
+  useEffect(() => {
+    if (context?.fetchDocuments) {
+      const interval = setInterval(() => {
+        context.fetchDocuments();
+      }, 5000);
+      return () => clearInterval(interval);
+    }
+  }, [context?.fetchDocuments]);
+
   const zkpQueue = dataPengajuan.filter(p => p.status === 'disetujui').map(p => ({
     id: p.id,
     kategori: p.kategori,
@@ -935,7 +1027,7 @@ const YayasanPage = ({ onLogoutClick = () => {} }) => {
   // ─── Create Campaign Form ───
   const [createForm, setCreateForm] = useState({
     title: '',
-    category: 'Sosial',
+    category: 'Ekonomi',
     target: '',
     targetRecipients: '',
     endDate: '',
@@ -952,15 +1044,7 @@ const YayasanPage = ({ onLogoutClick = () => {} }) => {
   };
 
   const handleDistribute = (camp) => {
-    setModal({ type: 'distribute', step: 'loading', data: camp });
-    setTimeout(() => {
-      setCampaigns((prev) => prev.map((c) => (c.id === camp.id ? { ...c, distStatus: 'Success', status: 'Selesai' } : c)));
-      setDistributions((prev) => [
-        { programId: '#' + camp.id, type: 'LEMBAGA', total: camp.collected, txHash: '0x' + Math.random().toString(16).substr(2, 6), campaign: camp.title },
-        ...prev,
-      ]);
-      setModal({ type: 'distribute', step: 'success', data: camp });
-    }, 3500);
+    setModal({ type: 'distribute', step: 'confirm', data: camp });
   };
 
   const handleCreateCampaign = (e) => {
@@ -972,20 +1056,29 @@ const YayasanPage = ({ onLogoutClick = () => {} }) => {
     const nc = {
       id: 'C-00' + (campaigns.length + 1),
       title: createForm.title,
+      judul: createForm.title, // untuk kompatibilitas data donatur.jsx
       category: createForm.category,
+      kategori: createForm.category, // untuk kompatibilitas filter donatur.jsx
+      tag: createForm.category,
       target: parseInt(createForm.target.replace(/\D/g, '') || '0'),
+      targetDonasi: parseInt(createForm.target.replace(/\D/g, '') || '0'),
       collected: 0,
-      status: 'Aktif',
+      terkumpul: 0,
+      status: 'Berjalan',
       distStatus: 'Pending',
       wallet: '0x' + Math.random().toString(16).substr(2, 6) + '...',
       recipients: parseInt(createForm.targetRecipients.replace(/\D/g, '') || '0'),
+      targetPenerima: parseInt(createForm.targetRecipients.replace(/\D/g, '') || '0'),
       endDate: createForm.endDate,
       foundationName: createForm.foundationName,
       image: campaignImage,
     };
     setCampaigns((p) => [nc, ...p]);
-    setCreateForm({ title: '', category: 'Sosial', target: '', targetRecipients: '', endDate: '', foundationName: '', image: null });
-    setModal(null);
+    if (context && context.tambahProgram) {
+      context.tambahProgram(nc);
+    }
+    setCreateForm({ title: '', category: 'Ekonomi', target: '', targetRecipients: '', endDate: '', foundationName: '', image: null });
+    setModal({ type: 'alert', data: `Sukses! Program "${nc.title}" dengan Kategori "${nc.category}" berhasil disimpan dan sekarang tersedia di Halaman Donatur.` });
   };
 
   const triggerAction = (msg) => {
@@ -1120,8 +1213,8 @@ const YayasanPage = ({ onLogoutClick = () => {} }) => {
                       <div>
                         <label className="text-xs font-bold text-gray-700 dark:text-slate-300 uppercase mb-1.5 block">Kategori</label>
                         <select value={createForm.category} onChange={(e) => setCreateForm({ ...createForm, category: e.target.value })} className="w-full px-4 py-2.5 bg-gray-50 dark:bg-slate-800/50 border border-gray-200 dark:border-slate-700 rounded-xl text-sm text-gray-900 dark:text-slate-100 focus:outline-none focus:border-emerald-600 dark:focus:border-emerald-500">
-                          <option>Sosial</option>
-                          <option>Bencana</option>
+                          <option>Ekonomi</option>
+                          <option>Bencana Alam</option>
                           <option>Pendidikan</option>
                           <option>Kesehatan</option>
                         </select>
@@ -1168,42 +1261,58 @@ const YayasanPage = ({ onLogoutClick = () => {} }) => {
                 </div>
               )}
 
-              {/* ── Distribute Loading ── */}
-              {modal.type === 'distribute' && modal.step === 'loading' && (
-                <div className="py-8">
-                  <div className="relative w-24 h-24 mx-auto mb-8">
-                    <div className="absolute inset-0 rounded-full border-4 border-gray-100 dark:border-slate-800" />
-                    <div className="absolute inset-0 rounded-full border-4 border-amber-500 border-t-transparent animate-spin" />
-                    <ArrowRightLeft size={32} className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-amber-600 dark:text-amber-400" />
-                  </div>
-                  <h3 className="text-xl font-bold text-gray-900 dark:text-slate-100 mb-2">Menyalurkan Dana Bantuan</h3>
-                  <p className="text-gray-500 dark:text-slate-400 text-sm">Mengirim transaksi Split Payment 95:5 ke Blockchain...</p>
-                </div>
-              )}
-
-              {/* ── Distribute Success ── */}
-              {modal.type === 'distribute' && modal.step === 'success' && (
-                <div className="py-6">
-                  <div className="w-24 h-24 bg-emerald-100 dark:bg-emerald-900/50 text-emerald-600 dark:text-emerald-400 rounded-full flex items-center justify-center mx-auto mb-6">
-                    <Check size={50} strokeWidth={3} />
-                  </div>
-                  <h3 className="text-2xl font-extrabold text-gray-900 dark:text-slate-100 mb-3">Distribusi Dana Sukses!</h3>
-                  <div className="bg-gray-50 dark:bg-slate-800/50 p-4 rounded-xl text-left mb-6 space-y-2 text-sm">
-                    <div className="flex justify-between">
-                      <span className="text-gray-500 dark:text-slate-400">Total Cair:</span>
-                      <span className="font-bold text-gray-900 dark:text-slate-100">{formatETH(modal.data.collected)}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-500 dark:text-slate-400">Alokasi Penerima (95%):</span>
-                      <span className="font-bold text-emerald-700 dark:text-emerald-400">{formatETH(modal.data.collected * 0.95)}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-500 dark:text-slate-400">Fee Operasional (5%):</span>
-                      <span className="font-bold text-amber-600 dark:text-amber-400">{formatETH(modal.data.collected * 0.05)}</span>
-                    </div>
-                  </div>
-                  <button onClick={() => setModal(null)} className="w-full py-4 bg-emerald-800 text-white rounded-xl font-bold hover:bg-emerald-900 transition shadow-lg">
-                    Tutup
+              {/* ── Distribute Confirm ── */}
+              {modal.type === 'distribute' && modal.step === 'confirm' && (
+                <div className="py-2 text-left">
+                  <h3 className="text-xl font-bold text-gray-900 dark:text-slate-100 mb-6 flex items-center gap-2 border-b border-gray-100 dark:border-slate-800 pb-3">
+                    Rincian Kalkulasi Distribusi
+                  </h3>
+                  {(() => {
+                    const totalDana = modal.data.collected || 50;
+                    const jumlahPenerima = modal.data.recipients || 50;
+                    const feeOperasional = totalDana * 0.05;
+                    const danaBersih = totalDana - feeOperasional;
+                    const distribusiPerOrang = danaBersih / jumlahPenerima;
+                    
+                    return (
+                      <div className="space-y-4 mb-6">
+                        <div className="flex justify-between border-b border-gray-100 dark:border-slate-800 pb-2">
+                          <span className="text-gray-500 dark:text-slate-400">Total Dana Terkumpul</span>
+                          <span className="font-bold">{formatETH(totalDana)}</span>
+                        </div>
+                        <div className="flex justify-between border-b border-gray-100 dark:border-slate-800 pb-2">
+                          <span className="text-gray-500 dark:text-slate-400">Potongan Fee Operasional (5%)</span>
+                          <span className="font-bold text-rose-500">- {formatETH(feeOperasional)}</span>
+                        </div>
+                        <div className="flex justify-between border-b border-gray-100 dark:border-slate-800 pb-2">
+                          <span className="text-gray-500 dark:text-slate-400">Dana Bersih (Net)</span>
+                          <span className="font-bold text-emerald-600">{formatETH(danaBersih)}</span>
+                        </div>
+                        <div className="flex justify-between border-b border-gray-100 dark:border-slate-800 pb-2">
+                          <span className="text-gray-500 dark:text-slate-400">Jumlah Penerima Bantuan</span>
+                          <span className="font-bold">{jumlahPenerima} Orang</span>
+                        </div>
+                        <div className="flex justify-between bg-emerald-50 dark:bg-emerald-900/30 p-4 rounded-xl mt-4 border border-emerald-100 dark:border-emerald-800/50">
+                          <span className="text-emerald-800 dark:text-emerald-400 font-bold">Nominal Per Orang</span>
+                          <span className="font-black text-emerald-700 dark:text-emerald-300 text-lg">{formatETH(distribusiPerOrang)}</span>
+                        </div>
+                      </div>
+                    );
+                  })()}
+                  <button 
+                    onClick={() => {
+                      console.log("Memanggil API/Smart Contract untuk menyalurkan dana program:", modal.data);
+                      setModal(null);
+                      setCampaigns((prev) => prev.map((c) => (c.id === modal.data.id ? { ...c, distStatus: 'Success', status: 'Selesai' } : c)));
+                      setDistributions((prev) => [
+                        { programId: '#' + modal.data.id, type: 'LEMBAGA', total: modal.data.collected, txHash: '0x' + Math.random().toString(16).substr(2, 6), campaign: modal.data.title },
+                        ...prev,
+                      ]);
+                      setModal({ type: 'alert', data: "Dana berhasil didistribusikan! (Cek console log)" });
+                    }}
+                    className="w-full bg-emerald-600 text-white font-bold py-4 rounded-xl hover:bg-emerald-700 transition flex items-center justify-center gap-2 shadow-lg shadow-emerald-600/30"
+                  >
+                    <Wallet size={18} /> Konfirmasi Salurkan Dana
                   </button>
                 </div>
               )}

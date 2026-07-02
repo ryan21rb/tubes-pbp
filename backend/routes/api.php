@@ -9,10 +9,18 @@ use Illuminate\Support\Facades\Route;
 Route::prefix('v1')->group(function () {
     // Otentikasi pengguna dApp
     Route::post('/auth/register', [AuthController::class, 'register']);
-    Route::post('/auth/login', [AuthController::class, 'login']);
+    Route::post('/auth/login',    [AuthController::class, 'login']);
 
-    // Data pendukung kampanye (Fetch/Read)
-    Route::get('/campaigns', [CampaignController::class, 'index']);
+    // Baca & buat kampanye (PUBLIC — Yayasan bisa publish tanpa token)
+    Route::get('/campaigns',  [CampaignController::class, 'index']);
+    Route::post('/campaigns', [CampaignController::class, 'store']);
+
+    // Baca semua pengajuan bantuan (PUBLIC — Instansi & Yayasan bisa akses)
+    Route::get('/documents', [DocumentController::class, 'index']);
+
+    // Node API Polling
+    Route::post('/nodes/heartbeat', [\App\Http\Controllers\Api\v1\NodeController::class, 'heartbeat']);
+    Route::get('/nodes/status', [\App\Http\Controllers\Api\v1\NodeController::class, 'status']);
 
     // Endpoint Terproteksi Token Laravel Sanctum
     Route::middleware('auth:sanctum')->group(function () {
@@ -22,16 +30,22 @@ Route::prefix('v1')->group(function () {
         // Upload berkas persyaratan korban & pinning IPFS
         Route::post('/document/upload', [DocumentController::class, 'upload']);
 
-        // Dashboard stats ringkasan profil & pelaporan
+        // Update status pengajuan: TTD atau Tolak (oleh Instansi)
+        Route::patch('/documents/{id}/status', [DocumentController::class, 'updateStatus']);
+        Route::post('/documents/{id}/vote', [DocumentController::class, 'vote']);
+
+        // Check document status untuk pemohon
+        Route::get('/my-document/status', [DocumentController::class, 'myDocumentStatus']);
+
+        // Dashboard stats
         Route::get('/dashboard/stats', [DashboardController::class, 'stats']);
 
         // Blockchain RPC integrations
-        Route::post('/blockchain/verify-tx', [\App\Http\Controllers\Api\v1\BlockchainController::class, 'verifyTransaction']);
+        Route::post('/blockchain/verify-tx',        [\App\Http\Controllers\Api\v1\BlockchainController::class, 'verifyTransaction']);
         Route::get('/blockchain/balance/{address}', [\App\Http\Controllers\Api\v1\BlockchainController::class, 'getBalance']);
 
-        // Create campaign, comments, and reports
-        Route::post('/campaigns', [CampaignController::class, 'store']);
+        // Comments and reports
         Route::post('/campaigns/{id}/comments', [CampaignController::class, 'addComment']);
-        Route::post('/campaigns/{id}/reports', [CampaignController::class, 'addReport']);
+        Route::post('/campaigns/{id}/reports',  [CampaignController::class, 'addReport']);
     });
 });
