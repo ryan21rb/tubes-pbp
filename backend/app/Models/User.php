@@ -11,6 +11,8 @@ use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
 
+use App\Enums\UserRole;
+
 #[Fillable(['name', 'email', 'password', 'role', 'wallet_address', 'instansi_type'])]
 #[Hidden(['password', 'remember_token'])]
 class User extends Authenticatable
@@ -28,6 +30,7 @@ class User extends Authenticatable
         return [
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
+            'role' => UserRole::class,
         ];
     }
 }

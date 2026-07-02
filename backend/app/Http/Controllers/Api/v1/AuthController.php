@@ -4,6 +4,8 @@ namespace App\Http\Controllers\Api\v1;
 
 use App\Http\Controllers\Controller;
 use App\Models\User;
+use App\Enums\UserRole;
+use Illuminate\Validation\Rules\Enum;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
@@ -19,7 +21,7 @@ class AuthController extends Controller
             'name'          => 'required|string|max:255',
             'email'         => 'required|string|email|max:255|unique:users',
             'password'      => 'required|string|min:8',
-            'role'          => 'nullable|string|in:yayasan,instansi,donatur,penerima',
+            'role'          => ['nullable', 'string', new Enum(UserRole::class)],
             'instansi_type' => 'nullable|string|in:dinsos,diknas,bpbd,dinkes',
             'wallet_address'=> 'nullable|string',
         ]);
