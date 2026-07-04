@@ -81,10 +81,16 @@ const ChartAnimation = () => {
 
 /* 1) BERANDA */
 const DashboardView = ({ campaigns, onAction }) => {
-  const { nodeStatuses = [] } = React.useContext(PhilanthropyContext) || {};
+  const { nodeStatuses = [], dataPengajuan = [] } = React.useContext(PhilanthropyContext) || {};
   const totalCollected = campaigns.reduce((s, c) => s + c.collected, 0);
   const activeCampaigns = campaigns.filter((c) => c.status === 'Aktif').length;
   const totalRecipients = campaigns.reduce((s, c) => s + c.recipients, 0);
+
+  // Hitung dana teralokasi riil dari program yang sukses tersalurkan
+  const totalAllocated = campaigns.reduce((s, c) => s + (c.distStatus === 'Success' ? c.collected : 0), 0);
+
+  // Hitung antrean verifikasi ZKP yang pending untuk Yayasan
+  const zkpQueuePending = dataPengajuan.filter(p => p.status === 'disetujui' && p.tahapBantuan === 'Otentikasi Yayasan').length;
 
   const instansiNodes = (nodeStatuses || []).filter(n => n.name.toLowerCase() !== 'yayasan ruang peduli bersama');
   const nodes = instansiNodes.length > 0 ? instansiNodes.map((n, i) => ({
@@ -165,14 +171,14 @@ const DashboardView = ({ campaigns, onAction }) => {
             <span className="text-[10px] font-extrabold text-gray-500 dark:text-slate-400 uppercase tracking-widest">DANA DIALOKASIKAN</span>
             <div className="w-8 h-8 bg-amber-50 dark:bg-amber-900/30 rounded flex items-center justify-center text-amber-600 dark:text-amber-400"><Database size={16} /></div>
           </div>
-          <h3 className="text-2xl font-black text-gray-900 dark:text-slate-100 mb-0">35.5 ETH</h3>
+          <h3 className="text-2xl font-black text-gray-900 dark:text-slate-100 mb-0">{formatETH(totalAllocated)}</h3>
         </div>
         <div className="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-gray-100 dark:border-slate-800 shadow-sm flex flex-col justify-center">
           <div className="flex justify-between items-start mb-4">
             <span className="text-[10px] font-extrabold text-gray-500 dark:text-slate-400 uppercase tracking-widest">ANTREAN VERIFIKASI</span>
             <div className="w-8 h-8 bg-red-50 dark:bg-red-900/30 rounded flex items-center justify-center text-red-500 dark:text-red-400"><FileCheck size={16} /></div>
           </div>
-          <h3 className="text-3xl font-black text-gray-900 dark:text-slate-100 mb-2 flex items-baseline gap-2">12 <span className="text-xs font-bold text-gray-400 dark:text-slate-500">Data ZKP</span></h3>
+          <h3 className="text-3xl font-black text-gray-900 dark:text-slate-100 mb-2 flex items-baseline gap-2">{zkpQueuePending} <span className="text-xs font-bold text-gray-400 dark:text-slate-500">Data ZKP</span></h3>
           <button onClick={() => onAction('gotoPenerima')} className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-1 hover:text-emerald-800 dark:hover:text-emerald-300 transition w-max">Lihat Antrean →</button>
         </div>
       </div>
@@ -978,16 +984,33 @@ const YayasanPage = ({ onLogoutClick = () => {} }) => {
   const [previewImage, setPreviewImage] = useState(null);
   const [modal, setModal] = useState(null);
 
-  // ─── Campaign State ───
+  const context = React.useContext(PhilanthropyContext);
+  const dataProgram = context?.dataProgram || [];
+  const dataPengajuan = context?.dataPengajuan || [];
+
+  // ─── Campaign State (Sinkronisasi Real-Time dengan Backend dataProgram) ───
   const [campaigns, setCampaigns] = useState([
     { id: 'C-001', title: 'Pembangunan Fasilitas Air Bersih Desa Cikaret', category: 'Ekonomi', target: 1.5, collected: 0.8, status: 'Aktif', distStatus: 'Pending', wallet: '0x8A2...981c', recipients: 100 },
     { id: 'C-002', title: 'Bantuan Medis Darurat Korban Banjir Garut', category: 'Bencana', target: 50.0, collected: 50.0, status: 'Selesai', distStatus: 'Pending', wallet: '0x3Fb...22a0', recipients: 50 },
     { id: 'C-003', title: 'Beasiswa Teknologi Anak Bangsa 2024', category: 'Pendidikan', target: 80.0, collected: 25.6, status: 'Aktif', distStatus: 'Pending', wallet: '0x4F9...2E8d', recipients: 75 },
   ]);
 
-  // ─── ZKP Queue State ───
-  const context = React.useContext(PhilanthropyContext);
-  const dataPengajuan = context?.dataPengajuan || [];
+  useEffect(() => {
+    if (dataProgram && dataProgram.length > 0) {
+      setCampaigns(dataProgram.map(c => ({
+        id: c.id,
+        title: c.judul || c.title,
+        category: c.kategori || c.category,
+        target: c.targetDonasi || c.target || 0,
+        collected: c.terkumpul || c.collected || 0,
+        status: c.status || 'Berjalan',
+        distStatus: c.distStatus || 'Pending',
+        wallet: c.wallet || '0x...',
+        recipients: c.targetPenerima || c.recipients || 0,
+        image: c.gambar || c.image || null
+      })));
+    }
+  }, [dataProgram]);
   
   // Polling data ZKP dari backend
   useEffect(() => {
@@ -1010,18 +1033,35 @@ const YayasanPage = ({ onLogoutClick = () => {} }) => {
   }));
   const setZkpQueue = () => {};
 
-  // ─── Distribution Ledger ───
+  // ─── Distribution Ledger Riil (dari Program yang Sukses Disalurkan) ───
   const [distributions, setDistributions] = useState([
     { programId: '#CAMP-03', type: 'INDIVIDU', total: 1.0, txHash: '0x9fc...41ba', campaign: 'Bantuan Sembako' },
     { programId: '#CAMP-01', type: 'LEMBAGA', total: 2.0, txHash: '0xabc...789', campaign: 'Bencana Banjir' },
     { programId: '#CAMP-02', type: 'INDIVIDU', total: 0.5, txHash: '0xdef...456', campaign: 'Beasiswa Desa' },
   ]);
 
-  // ─── Audit Data ───
+  useEffect(() => {
+    const realDist = campaigns.filter(c => c.distStatus === 'Success').map(c => ({
+      programId: `#CAMP-${c.id}`,
+      type: 'KOLEKTIF',
+      total: c.collected,
+      txHash: c.wallet || '0xabc...123',
+      campaign: c.title
+    }));
+    if (realDist.length > 0) {
+      setDistributions(realDist);
+    }
+  }, [campaigns]);
+
+  // ─── Audit Data Dinamis (Dihitung dari Real Data) ───
+  const totalCollected = campaigns.reduce((s, c) => s + c.collected, 0);
+  const totalAllocated = campaigns.reduce((s, c) => s + (c.distStatus === 'Success' ? c.collected : 0), 0);
+  const verifiedRecipientsCount = dataPengajuan.filter(p => p.status === 'disetujui' && (p.tahapBantuan === 'Cairkan Dana' || p.tahapBantuan === 'Selesai')).length;
+
   const auditData = {
-    totalDonations: 50.0,
-    verifiedRecipients: 4501,
-    availableFunds: 355.0,
+    totalDonations: totalCollected,
+    verifiedRecipients: verifiedRecipientsCount,
+    availableFunds: totalCollected - totalAllocated,
   };
 
   // ─── Create Campaign Form ───

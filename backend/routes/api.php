@@ -17,6 +17,7 @@ Route::prefix('v1')->group(function () {
 
     // Baca semua pengajuan bantuan (PUBLIC — Instansi & Yayasan bisa akses)
     Route::get('/documents', [DocumentController::class, 'index']);
+    Route::post('/documents/{id}/vote', [DocumentController::class, 'vote']);
 
     // Node API Polling
     Route::post('/nodes/heartbeat', [\App\Http\Controllers\Api\v1\NodeController::class, 'heartbeat']);
@@ -32,7 +33,6 @@ Route::prefix('v1')->group(function () {
 
         // Update status pengajuan: TTD atau Tolak (oleh Instansi)
         Route::patch('/documents/{id}/status', [DocumentController::class, 'updateStatus']);
-        Route::post('/documents/{id}/vote', [DocumentController::class, 'vote']);
 
         // Check document status untuk pemohon
         Route::get('/my-document/status', [DocumentController::class, 'myDocumentStatus']);

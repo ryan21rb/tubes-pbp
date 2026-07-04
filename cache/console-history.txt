@@ -1,16 +1,0 @@
-}));
-// 3. Tampilkan daftar alamat user yang sudah melakukan verifikasi ZKP
-const events = await povertyCheck.queryFilter(filter, 0, "latest");// 2. Ambil semua event yang pernah di-emit dari blok pertama (0) hingga blok terbaru (latest)const
-// 1. Buat filter untuk event StatusVerified
-await povertyCheck.admin()
-// Cek alamat admin kontrak
-await povertyCheck.zkVerifierAddress()
-// Cek alamat ZK Verifier yang terdaftar di kontrak
-const povertyCheck = await ethers.getCon
-// 2. Inisialisasi instance kontrak menggunakan ABI dan Alamat Kontrak yang dideploy (0xe7f1725E7734CE288F8367e1Bb143E90
-// 1. Load file JSON artifact kontrak PovertyCheck
-(await ethers.getContractAt("PovertyCheck", "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512")).zkVerifierAddress()
-await PovertyCheck.zkVerifierAddress();
-const PovertyCheck = await ethers.getContractAt("PovertyCheck", "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512");
-await PovertyCheck.getRecord("0x5a584E7D505AC812e6B095F6f5885884d2615aAb");
-const PovertyCheck = await ethers.getContractAt("./PovertyCheck.sol/PovertyCheck.json", "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512");

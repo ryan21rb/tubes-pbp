@@ -45,11 +45,11 @@ export const PhilanthropyProvider = ({ children }) => {
   // --- STATE NODE STATUSES (API Polling) ---
   const [nodeStatuses, setNodeStatuses] = useState([]);
   const VIP_NODES = [
-    '0x69e1db697b01d5bc54242011364cdbb141f1f990', // Dinas Sosial
-    '0x5a584e7d505ac812e6b095f6f5885884d2615aab', // Dinas Pendidikan
-    '0x6bbbf41d0decdc96bd44c14b953b31b9e9ae37bb', // BPBD
-    '0xab2bd36fa71777a23f87399212b782a96ee1256b', // Dinas Kesehatan
-    '0x92fb1524ce518cb9d7cf656f92422ac07868eaac', // Yayasan
+    '0x5a584e7d505ac812e6b095f6f5885884d2615aab', // Dinas Sosial
+    '0x6bbbf41d0decdc96bd44c14b953b31b9e9ae37bb', // Dinas Pendidikan
+    '0xab2bd36fa71777a23f87399212b782a96ee1256b', // BPBD
+    '0xfa411cb3f7fbf067ba20881662dd70c01ca4fe16', // Dinas Kesehatan
+    '0x507610fdf65637c1752657664dfea2865e589b88', // Yayasan
   ];
 
   // --- STATE KAMPANYE (dari API) ---
@@ -132,6 +132,7 @@ export const PhilanthropyProvider = ({ children }) => {
         rejectedNodes: d.rejected_by || [],
         approvals: d.approvals || [],
         totalResponses: d.total_responses || 0,
+        details: d.details || null,
         tanggalSistem: d.created_at ? new Date(d.created_at).toLocaleDateString('id-ID', { weekday: 'long' }) : '',
         processingTimeMinutes: 10,
       }));
@@ -192,7 +193,27 @@ export const PhilanthropyProvider = ({ children }) => {
     if (typeof window !== 'undefined' && typeof window.ethereum !== 'undefined') {
       const handleAccountsChanged = async (accounts) => {
         if (accounts.length > 0) {
-          const address = accounts[0];
+          const address = accounts[0].toLowerCase();
+          
+          // Cek jika user login sebagai VIP
+          const storedToken = localStorage.getItem('auth_token');
+          if (storedToken === 'vip_bypass') {
+            const isVip = VIP_NODES.map(v => v.toLowerCase()).includes(address);
+            if (isVip) {
+              // Tentukan role berdasarkan wallet baru secara dinamis
+              const newRole = address === '0x507610fdf65637c1752657664dfea2865e589b88' ? 'yayasan' : 'instansi';
+              localStorage.setItem('user_role', newRole);
+              setUserRole(newRole);
+              
+              // Arahkan ke hash halaman yang sesuai
+              window.location.hash = newRole === 'yayasan' ? '#/yayasan' : '#/instansi';
+            } else {
+              await logout();
+              window.location.hash = '#/';
+              return;
+            }
+          }
+
           try {
             const provider = new ethers.BrowserProvider(window.ethereum);
             const balanceWei = await provider.getBalance(address);
@@ -206,6 +227,13 @@ export const PhilanthropyProvider = ({ children }) => {
           setWalletAddress('');
           setWalletBalance(0);
           setDashboardStats(null);
+          
+          // Log out jika akun terputus total
+          const storedToken = localStorage.getItem('auth_token');
+          if (storedToken === 'vip_bypass') {
+            await logout();
+            window.location.hash = '#/';
+          }
         }
       };
 
@@ -221,11 +249,34 @@ export const PhilanthropyProvider = ({ children }) => {
           const provider = new ethers.BrowserProvider(window.ethereum);
           const accounts = await provider.send('eth_accounts', []);
           if (accounts.length > 0) {
-            const address = accounts[0];
+            const address = accounts[0].toLowerCase();
+            
+            // Cek jika user login sebagai VIP
+            const storedToken = localStorage.getItem('auth_token');
+            if (storedToken === 'vip_bypass') {
+              const isVip = VIP_NODES.map(v => v.toLowerCase()).includes(address);
+              if (isVip) {
+                const newRole = address === '0x507610fdf65637c1752657664dfea2865e589b88' ? 'yayasan' : 'instansi';
+                localStorage.setItem('user_role', newRole);
+                setUserRole(newRole);
+              } else {
+                await logout();
+                window.location.hash = '#/';
+                return;
+              }
+            }
+
             const balanceWei = await provider.getBalance(address);
             const balanceEth = parseFloat(ethers.formatEther(balanceWei));
             setWalletAddress(address);
             setWalletBalance(balanceEth);
+          } else {
+            // Log out jika tidak ada wallet terhubung padahal login VIP
+            const storedToken = localStorage.getItem('auth_token');
+            if (storedToken === 'vip_bypass') {
+              await logout();
+              window.location.hash = '#/';
+            }
           }
         } catch (err) {
           console.error('Gagal memeriksa status koneksi wallet:', err);
@@ -407,6 +458,7 @@ export const PhilanthropyProvider = ({ children }) => {
         id: document_id || `DOC-${Math.floor(Math.random() * 9000) + 1000}`,
         ...formData,
         cid, // Content Identifier dari IPFS (digunakan untuk verifikasi ZKP)
+        details: response.data?.details || null,
         status: 'menunggu',
         signedNodes: [],
         rejectedNodes: [],
@@ -442,8 +494,21 @@ export const PhilanthropyProvider = ({ children }) => {
   // ============================================================
   // FUNGSI STATE MANAGEMENT INSTANSI & YAYASAN
   // ============================================================
-  const updateTahapBantuan = (id, tahapBaru) => {
-    setDataPengajuan(prev => prev.map(p => p.id === id ? { ...p, tahapBantuan: tahapBaru } : p));
+  const updateTahapBantuan = async (id, tahapBaru) => {
+    setDataPengajuan(prev => prev.map(p => {
+      if (p.id === id) {
+        let status = p.status;
+        if (tahapBaru === 'Cairkan Dana') status = 'zkp_validated';
+        if (tahapBaru === 'Selesai') status = 'selesai';
+        return { ...p, tahapBantuan: tahapBaru, status };
+      }
+      return p;
+    }));
+    try {
+      await apiUpdateDocumentStatus(id, { action: 'update_tahap', tahap_bantuan: tahapBaru, node_name: 'Yayasan' });
+    } catch (err) {
+      console.error('[updateTahapBantuan] Gagal mengupdate tahap bantuan:', err);
+    }
   };
 
   const updateStatusPengajuan = async (id, newSignedNodes, newRejectedNodes, statusBaru, action, nodeName) => {

@@ -166,18 +166,20 @@ export default function LandingPage({ onLoginClick }) {
         const address = accounts[0].toLowerCase();
         
         // Jika berhasil connect di Metamask, cek apakah dia VIP
-        if (VIP_NODES.includes(address)) {
-           // Login instan VIP (bypass auth form)
+        if (VIP_NODES.map(v => v.toLowerCase()).includes(address)) {
+           // Login instan VIP (bypass auth form dengan set mock token)
+           const role = address === '0x507610fdf65637c1752657664dfea2865e589b88' ? 'yayasan' : 'instansi';
+           if (setAuthToken) setAuthToken('vip_bypass', role);
+
            if (setWalletAddress) setWalletAddress(address);
            if (connectWallet) await connectWallet();
            
            // Bypass routing (Instansi vs Yayasan)
-           if (address === '0x92fb1524ce518cb9d7cf656f92422ac07868eaac') {
+           if (role === 'yayasan') {
              window.location.hash = '#/yayasan';
            } else {
              window.location.hash = '#/instansi';
            }
-           // Biarkan isConnecting=true agar spinner tidak hilang sampai pindah halaman
         } else {
            // Bukan VIP, munculkan form Login / Register (Tidak dipindah)
            setIsConnecting(false);

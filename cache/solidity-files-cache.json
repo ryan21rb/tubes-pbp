@@ -1,4 +1,78 @@
 {
   "_format": "hh-sol-cache-2",
-  "files": {}
+  "files": {
+    "C:\\Users\\Acer\\OneDrive\\Dokumen\\philantrophy-project\\contracts\\PovertyCheck.sol": {
+      "lastModificationDate": 1783083387681,
+      "contentHash": "32256997acfc3bb105abbd3844b324ad",
+      "sourceName": "contracts/PovertyCheck.sol",
+      "solcConfig": {
+        "version": "0.8.28",
+        "settings": {
+          "evmVersion": "paris",
+          "optimizer": {
+            "enabled": false,
+            "runs": 200
+          },
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          }
+        }
+      },
+      "imports": [],
+      "versionPragmas": [
+        "^0.8.28"
+      ],
+      "artifacts": [
+        "IZKVerifier",
+        "PovertyCheck"
+      ]
+    },
+    "C:\\Users\\Acer\\OneDrive\\Dokumen\\philantrophy-project\\contracts\\verifier.sol": {
+      "lastModificationDate": 1783083394562,
+      "contentHash": "1e1dc92981875f7b85011343930ea3cb",
+      "sourceName": "contracts/verifier.sol",
+      "solcConfig": {
+        "version": "0.8.28",
+        "settings": {
+          "evmVersion": "paris",
+          "optimizer": {
+            "enabled": false,
+            "runs": 200
+          },
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          }
+        }
+      },
+      "imports": [],
+      "versionPragmas": [
+        "^0.8.28"
+      ],
+      "artifacts": [
+        "Groth16Verifier"
+      ]
+    }
+  }
 }

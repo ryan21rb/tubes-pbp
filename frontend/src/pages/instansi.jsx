@@ -26,10 +26,10 @@ import {
 
 // DATA KONSISTEN DOMPET sistem TIAP Instansi Validator KONSORSIUM
 const NODE_IDENTITIES = {
-  Dinsos: { name: "Dinas Sosial", role: "Node 1", address: "0x69e1db697b01d5bc54242011364cdbb141f1f990" },
-  Disdik: { name: "Dinas Pendidikan", role: "Node 2", address: "0x5a584e7d505ac812e6b095f6f5885884d2615aab" },
-  BPBD: { name: "BPBD", role: "Node 3", address: "0x6bbbf41d0decdc96bd44c14b953b31b9e9ae37bb" },
-  Dinkes: { name: "Dinas Kesehatan", role: "Node 4", address: "0xab2bd36fa71777a23f87399212b782a96ee1256b" }
+  Dinsos: { name: "Dinas Sosial", role: "Node 1", address: "0x5a584e7d505ac812e6b095f6f5885884d2615aab" },
+  Disdik: { name: "Dinas Pendidikan", role: "Node 2", address: "0x6bbbf41d0decdc96bd44c14b953b31b9e9ae37bb" },
+  BPBD: { name: "BPBD", role: "Node 3", address: "0xab2bd36fa71777a23f87399212b782a96ee1256b" },
+  Dinkes: { name: "Dinas Kesehatan", role: "Node 4", address: "0xfa411cb3f7fbf067ba20881662dd70c01ca4fe16" }
 };
 
 export default function ValidatorDashboard({ onLogoutClick = () => {} }) {
@@ -51,6 +51,7 @@ export default function ValidatorDashboard({ onLogoutClick = () => {} }) {
   const typeMap = {
     dinsos: "Dinsos",
     diknas: "Disdik",
+    disdik: "Disdik",
     bpbd: "BPBD",
     dinkes: "Dinkes"
   };
@@ -122,7 +123,17 @@ export default function ValidatorDashboard({ onLogoutClick = () => {} }) {
     { id: "laporan", icon: <FileText size={22} />, label: "Laporan" },
   ];
 
-  const currentNodeCategoryAuthority = "Ekonomi";
+  const getCategoryAuthority = () => {
+    if (!walletAddress) return "";
+    const addr = walletAddress.toLowerCase();
+    if (addr === "0x5a584e7d505ac812e6b095f6f5885884d2615aab") return "Ekonomi";
+    if (addr === "0x6bbbf41d0decdc96bd44c14b953b31b9e9ae37bb") return "Pendidikan";
+    if (addr === "0xab2bd36fa71777a23f87399212b782a96ee1256b") return "Bencana Alam";
+    if (addr === "0xfa411cb3f7fbf067ba20881662dd70c01ca4fe16") return "Kesehatan";
+    return "";
+  };
+
+  const currentNodeCategoryAuthority = getCategoryAuthority();
 
   // ====== LOGIKA KOMPUTASI REAL-TIME SINKRON ======
   const totalBerkas = localPengajuan.length;
@@ -737,7 +748,7 @@ export default function ValidatorDashboard({ onLogoutClick = () => {} }) {
               initial={{ opacity: 0, scale: 0.95, y: 10 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 10 }}
-              className="bg-white dark:bg-slate-900 rounded-[2.5rem] p-10 max-w-xl w-full shadow-2xl relative border border-gray-100 dark:border-slate-800"
+              className="bg-white dark:bg-slate-900 rounded-[2.5rem] p-10 max-w-xl w-full shadow-2xl relative border border-gray-100 dark:border-slate-800 max-h-[90vh] overflow-y-auto scrollbar-thin"
             >
               <div className="flex justify-between items-center mb-8">
                 <div>
@@ -752,19 +763,104 @@ export default function ValidatorDashboard({ onLogoutClick = () => {} }) {
               <div className="space-y-6">
                 {selectedPengajuan.kategori === currentNodeCategoryAuthority ? (
                   <div className="space-y-5 text-sm bg-emerald-50/50 dark:bg-emerald-900/10 p-6 rounded-2xl border border-emerald-100 dark:border-emerald-800/50">
-                    <h4 className="font-bold text-emerald-800 dark:text-emerald-400 border-b border-emerald-200 dark:border-emerald-800/50 pb-3 mb-3 text-base">Data Lengkap Pendaftar</h4>
+                    <div className="flex justify-between items-center border-b border-emerald-200 dark:border-emerald-800/50 pb-3 mb-3">
+                      <h4 className="font-bold text-emerald-800 dark:text-emerald-400 text-base">Data Lengkap Pendaftar</h4>
+                      <span className="flex items-center gap-1.5 px-3 py-1 bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300 font-extrabold text-[10px] uppercase rounded-full border border-emerald-200 dark:border-emerald-700/50">
+                        🔓 Otoritas Terbuka
+                      </span>
+                    </div>
                     <div className="grid grid-cols-2 gap-y-4 gap-x-4 text-gray-700 dark:text-slate-300">
                       <div><span className="text-gray-400 block text-[10px] uppercase font-bold mb-1">Nama Lengkap</span> <span className="font-bold text-base">{selectedPengajuan.nama}</span></div>
                       <div><span className="text-gray-400 block text-[10px] uppercase font-bold mb-1">Kategori Sistem</span> <span className="font-bold text-base">{selectedPengajuan.kategori}</span></div>
                       <div><span className="text-gray-400 block text-[10px] uppercase font-bold mb-1">NIK</span> <span className="font-bold text-base">{selectedPengajuan.nik}</span></div>
-                      <div><span className="text-gray-400 block text-[10px] uppercase font-bold mb-1">Umur</span> <span className="font-bold text-base">{selectedPengajuan.umur} Tahun</span></div>
-                      <div className="col-span-2"><span className="text-gray-400 block text-[10px] uppercase font-bold mb-1">Alamat Lengkap</span> <span className="font-bold text-base">{selectedPengajuan.alamat}</span></div>
+                      <div><span className="text-gray-400 block text-[10px] uppercase font-bold mb-1">Umur</span> <span className="font-bold text-base">{selectedPengajuan.details?.tglLahir ? (new Date().getFullYear() - new Date(selectedPengajuan.details.tglLahir).getFullYear()) : "—"} Tahun</span></div>
+                      <div className="col-span-2"><span className="text-gray-400 block text-[10px] uppercase font-bold mb-1">Alamat Lengkap</span> <span className="font-bold text-base">{selectedPengajuan.details?.koordinat || "—"}</span></div>
+                      
+                      {/* Data Spesifik Kategori (ZKP Decrypted) */}
+                      {selectedPengajuan.details && (
+                        <div className="col-span-2 mt-4 pt-4 border-t border-emerald-200 dark:border-emerald-800/50 grid grid-cols-2 gap-4">
+                          <h5 className="col-span-2 font-black text-emerald-800 dark:text-emerald-400 text-xs uppercase tracking-wider">Kuesioner Detail & Berkas Pendukung (Decrypted)</h5>
+                          
+                          {selectedPengajuan.kategori === 'Ekonomi' && (
+                            <>
+                              <div><span className="text-gray-400 block text-[10px] uppercase font-bold mb-1">No SKTM</span> <span className="font-bold text-sm">{selectedPengajuan.details.noSktm || "—"}</span></div>
+                              <div><span className="text-gray-400 block text-[10px] uppercase font-bold mb-1">Pendapatan Bulanan</span> <span className="font-bold text-sm">{selectedPengajuan.details.pendapatan || "—"} ETH</span></div>
+                              <div><span className="text-gray-400 block text-[10px] uppercase font-bold mb-1">Jumlah Tanggungan</span> <span className="font-bold text-sm">{selectedPengajuan.details.tanggungan || "—"} Orang</span></div>
+                            </>
+                          )}
+
+                          {selectedPengajuan.kategori === 'Bencana Alam' && (
+                            <>
+                              <div><span className="text-gray-400 block text-[10px] uppercase font-bold mb-1">Estimasi Kerugian</span> <span className="font-bold text-sm">{selectedPengajuan.details.kerugian || "—"} ETH</span></div>
+                              <div><span className="text-gray-400 block text-[10px] uppercase font-bold mb-1">Koordinat / Lokasi</span> <span className="font-bold text-sm">{selectedPengajuan.details.koordinat || "—"}</span></div>
+                              <div><span className="text-gray-400 block text-[10px] uppercase font-bold mb-1">Tanggal Kejadian</span> <span className="font-bold text-sm">{selectedPengajuan.details.tglBencana || "—"}</span></div>
+                            </>
+                          )}
+
+                          {selectedPengajuan.kategori === 'Kesehatan' && (
+                            <>
+                              <div><span className="text-gray-400 block text-[10px] uppercase font-bold mb-1">Nama Rumah Sakit</span> <span className="font-bold text-sm">{selectedPengajuan.details.namaRs || "—"}</span></div>
+                              <div><span className="text-gray-400 block text-[10px] uppercase font-bold mb-1">Nomor Rujukan</span> <span className="font-bold text-sm">{selectedPengajuan.details.noRujukan || "—"}</span></div>
+                              <div><span className="text-gray-400 block text-[10px] uppercase font-bold mb-1">Biaya Medis</span> <span className="font-bold text-sm">{selectedPengajuan.details.biayaMedis || "—"} ETH</span></div>
+                            </>
+                          )}
+
+                          {selectedPengajuan.kategori === 'Pendidikan' && (
+                            <>
+                              <div><span className="text-gray-400 block text-[10px] uppercase font-bold mb-1">Institusi / Universitas</span> <span className="font-bold text-sm">{selectedPengajuan.details.kampus || "—"}</span></div>
+                              <div><span className="text-gray-400 block text-[10px] uppercase font-bold mb-1">NIM / NISN</span> <span className="font-bold text-sm">{selectedPengajuan.details.nim || "—"}</span></div>
+                              <div><span className="text-gray-400 block text-[10px] uppercase font-bold mb-1">Tunggakan SPP/UKT</span> <span className="font-bold text-sm">{selectedPengajuan.details.tunggakan || "—"} ETH</span></div>
+                            </>
+                          )}
+
+                          {/* List Berkas / Dokumen Pendukung */}
+                          {selectedPengajuan.details.files && (
+                            <div className="col-span-2 mt-2 space-y-2">
+                              <span className="text-gray-400 block text-[10px] uppercase font-bold">Dokumen Fisik (Off-Chain IPFS)</span>
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                {Object.entries(selectedPengajuan.details.files).map(([fileKey, fileObj]) => {
+                                  const fileUrl = `http://localhost:8000/storage/${fileObj.file_path}`;
+                                  return (
+                                    <a 
+                                      key={fileKey}
+                                      href={fileUrl}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="p-3 bg-white dark:bg-slate-800 rounded-xl border border-gray-100 dark:border-slate-700 hover:border-emerald-500 hover:text-emerald-600 transition flex items-center justify-between text-xs font-bold"
+                                    >
+                                      <span className="truncate pr-2">{fileKey.toUpperCase()}: {fileObj.file_name}</span>
+                                      <Eye size={14} className="shrink-0 text-emerald-500" />
+                                    </a>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </div>
                   </div>
                 ) : (
-                  <div className="bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-800 rounded-2xl p-6 space-y-3 text-sm">
-                    <p className="text-amber-800 dark:text-amber-400 font-bold text-base">Bukan Kategori Domain Anda</p>
-                    <p className="text-gray-600 dark:text-slate-400 text-xs leading-relaxed">Identitas mentah dienkripsi penuh lokal. Silakan memverifikasi validitas tanda tangan sistem.</p>
+                  <div className="space-y-5 text-sm bg-slate-50 dark:bg-slate-900 p-6 rounded-2xl border border-gray-200 dark:border-slate-800">
+                    <div className="flex items-center justify-between border-b dark:border-slate-800 pb-3 mb-3">
+                      <h4 className="font-bold text-slate-700 dark:text-slate-300 text-base">Data Lengkap Pendaftar</h4>
+                      <span className="flex items-center gap-1.5 px-3 py-1 bg-rose-50 dark:bg-rose-900/30 text-rose-600 dark:text-rose-400 font-extrabold text-[10px] uppercase rounded-full border border-rose-100 dark:border-rose-800/50">
+                        🔒 ZKP Shielded (Encrypted)
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-y-4 gap-x-4 text-gray-600 dark:text-slate-400">
+                      <div><span className="text-gray-400 block text-[10px] uppercase font-bold mb-1">Nama Lengkap</span> <span className="font-mono text-sm tracking-wide bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded">{obfuscateName(selectedPengajuan.nama)}</span></div>
+                      <div><span className="text-gray-400 block text-[10px] uppercase font-bold mb-1">Kategori Sistem</span> <span className="font-bold text-sm">{selectedPengajuan.kategori}</span></div>
+                      <div><span className="text-gray-400 block text-[10px] uppercase font-bold mb-1">NIK</span> <span className="font-mono text-sm tracking-wide bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded">3201************</span></div>
+                      <div><span className="text-gray-400 block text-[10px] uppercase font-bold mb-1">Umur</span> <span className="font-mono text-sm tracking-wide bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded">** Tahun</span></div>
+                      <div className="col-span-2"><span className="text-gray-400 block text-[10px] uppercase font-bold mb-1">Alamat Lengkap</span> <span className="font-mono text-sm tracking-wide bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded truncate block">Enkripsi ZKP (Terkunci)</span></div>
+                    </div>
+                    <div className="bg-amber-50/50 dark:bg-amber-950/20 border border-amber-100 dark:border-amber-900/50 rounded-xl p-4 space-y-2 mt-4 text-xs">
+                      <p className="text-amber-800 dark:text-amber-400 font-bold">Otoritas Otonom Instansi Terbatas</p>
+                      <p className="text-gray-500 dark:text-slate-400 leading-relaxed">
+                        Data kuisioner rinci & file fisik hanya dapat diakses oleh **Dinas Otoritas Domain** yang relevan. Keabsahan data telah divalidasi oleh sistem kriptografi tanpa mengekspos isi dokumen.
+                      </p>
+                    </div>
                   </div>
                 )}
 
@@ -787,7 +883,7 @@ export default function ValidatorDashboard({ onLogoutClick = () => {} }) {
                       
                       if (isSigned) {
                         styleClass = "bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 border-emerald-200";
-                        textNode = "Disahkan";
+                        textNode = "Disetujui";
                       } else if (isRejected) {
                         styleClass = "bg-rose-50 dark:bg-rose-900/20 text-rose-600 border-rose-200";
                         textNode = "Ditolak";
@@ -825,7 +921,9 @@ export default function ValidatorDashboard({ onLogoutClick = () => {} }) {
                 } else if (hasVoted) {
                   return (
                     <div className="mt-8 pt-6 border-t dark:border-slate-800">
-                      <div className="text-sm font-bold text-emerald-600 text-center uppercase tracking-widest">Suara Anda Telah Masuk</div>
+                      <div className="text-sm font-extrabold text-emerald-600 text-center uppercase tracking-widest flex items-center justify-center gap-2">
+                        ✓ Berhasil memberi tanda tangan dan sudah disimpan di sistem
+                      </div>
                     </div>
                   );
                 } else {

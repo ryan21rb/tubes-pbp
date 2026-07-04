@@ -20,6 +20,7 @@ class Document extends Model
         'kategori',
         'keterangan',
         'wallet_address',
+        'details',
         // Pipeline status
         'status',
         'tahap_bantuan',
@@ -30,6 +31,7 @@ class Document extends Model
     protected $casts = [
         'signed_by'   => 'array',
         'rejected_by' => 'array',
+        'details'     => 'array',
     ];
 
     /**

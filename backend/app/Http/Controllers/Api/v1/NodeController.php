@@ -16,11 +16,11 @@ class NodeController extends Controller
      * Semua alamat dalam format lowercase untuk komparasi case-insensitive.
      */
     private array $vipNodes = [
-        'dinas sosial' => '0x69e1db697b01d5bc54242011364cdbb141f1f990',
-        'dinas pendidikan' => '0x5a584e7d505ac812e6b095f6f5885884d2615aab',
-        'bpbd' => '0x6bbbf41d0decdc96bd44c14b953b31b9e9ae37bb',
-        'dinas kesehatan' => '0xab2bd36fa71777a23f87399212b782a96ee1256b',
-        'yayasan ruang peduli bersama' => '0x92fb1524ce518cb9d7cf656f92422ac07868eaac',
+        'dinas sosial' => '0x5a584e7d505ac812e6b095f6f5885884d2615aab',
+        'dinas pendidikan' => '0x6bbbf41d0decdc96bd44c14b953b31b9e9ae37bb',
+        'bpbd' => '0xab2bd36fa71777a23f87399212b782a96ee1256b',
+        'dinas kesehatan' => '0xfa411cb3f7fbf067ba20881662dd70c01ca4fe16',
+        'yayasan ruang peduli bersama' => '0x507610fdf65637c1752657664dfea2865e589b88',
     ];
 
     /**
@@ -99,11 +99,21 @@ class NodeController extends Controller
                 }
             }
 
+            // ==============================================================================
+            // [RUMUS RAFT - RANDOMIZED ELECTION TIMEOUT]
+            // T_timeout dalam interval [T_min, T_max] di mana T_min = 150ms dan T_max = 300ms.
+            // Digunakan oleh node pengikut (follower) untuk menentukan kapan mereka harus 
+            // menaikkan status menjadi kandidat (candidate) jika tidak menerima heartbeat dari leader.
+            // Setiap node menghasilkan waktu tunggu secara acak untuk mencegah bentrok suara.
+            $electionTimeoutMs = rand(150, 300);
+            // ==============================================================================
+
             $statusList[] = [
                 'name' => ucwords($name),
                 'wallet_address' => $address,
                 'is_active' => $isActive,
-                'last_seen_text' => $lastSeenText
+                'last_seen_text' => $lastSeenText,
+                'election_timeout_ms' => $electionTimeoutMs
             ];
         }
 

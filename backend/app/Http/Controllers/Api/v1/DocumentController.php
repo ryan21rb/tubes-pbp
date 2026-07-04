@@ -46,6 +46,7 @@ class DocumentController extends Controller
                     'total_responses' => count($allApprovals),
                     'ipfs_cid'        => $doc->ipfs_cid,
                     'file_name'       => $doc->file_name,
+                    'details'         => $doc->details,
                     'created_at'      => $doc->created_at,
                     'user'            => $doc->user ? ['name' => $doc->user->name, 'role' => $doc->user->role] : null,
                 ];
@@ -66,13 +67,35 @@ class DocumentController extends Controller
         $document = Document::findOrFail($id);
 
         $validated = $request->validate([
-            'action'    => 'required|in:sign,reject',
-            'node_name' => 'required|string|max:100',
+            'action'        => 'required|in:sign,reject,update_tahap',
+            'node_name'     => 'required_if:action,sign,reject|string|max:100',
+            'tahap_bantuan' => 'required_if:action,update_tahap|string|max:100',
         ]);
+
+        if ($validated['action'] === 'update_tahap') {
+            $updateData = [
+                'tahap_bantuan' => $validated['tahap_bantuan']
+            ];
+
+            // Update status secara otomatis agar sinkron dengan stepper di frontend
+            if ($validated['tahap_bantuan'] === 'Cairkan Dana') {
+                $updateData['status'] = 'zkp_validated';
+            } elseif ($validated['tahap_bantuan'] === 'Selesai') {
+                $updateData['status'] = 'selesai';
+            }
+
+            $document->update($updateData);
+
+            return response()->json([
+                'status'  => 'success',
+                'message' => 'Tahap bantuan berhasil diperbarui.',
+                'document' => $document
+            ]);
+        }
 
         $signedBy   = $document->signed_by   ?? [];
         $rejectedBy = $document->rejected_by ?? [];
-        $nodeName   = $validated['node_name'];
+        $nodeName   = $validated['node_name'] ?? 'Yayasan';
 
         if ($validated['action'] === 'sign') {
             // Tambahkan node ke signed_by jika belum ada
@@ -82,9 +105,9 @@ class DocumentController extends Controller
             // Hapus dari rejected jika sebelumnya menolak
             $rejectedBy = array_values(array_filter($rejectedBy, fn($n) => $n !== $nodeName));
 
-            // Jika 4 node sudah TTD → disetujui
-            $newStatus     = count($signedBy) >= 4 ? 'disetujui' : $document->status;
-            $tahapBantuan  = count($signedBy) >= 4 ? 'Otentikasi Yayasan' : $document->tahap_bantuan;
+            // Jika 3 node sudah TTD → disetujui
+            $newStatus     = count($signedBy) >= 3 ? 'disetujui' : $document->status;
+            $tahapBantuan  = count($signedBy) >= 3 ? 'Otentikasi Yayasan' : $document->tahap_bantuan;
         } else {
             // Tambahkan ke rejected_by
             if (!in_array($nodeName, $rejectedBy)) {
@@ -132,6 +155,21 @@ class DocumentController extends Controller
 
         $walletLower = strtolower($validated['wallet_address']);
 
+        // Pastikan wallet yang mengirim vote terdaftar sebagai salah satu instansi validator
+        $allowedWallets = [
+            '0x5a584e7d505ac812e6b095f6f5885884d2615aab', // Dinsos
+            '0x6bbbf41d0decdc96bd44c14b953b31b9e9ae37bb', // Disdik
+            '0xab2bd36fa71777a23f87399212b782a96ee1256b', // BPBD
+            '0xfa411cb3f7fbf067ba20881662dd70c01ca4fe16', // Dinkes
+        ];
+
+        if (!in_array($walletLower, $allowedWallets)) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Alamat dompet Anda tidak terdaftar sebagai instansi validator yang sah.'
+            ], 403);
+        }
+
         // Pastikan belum pernah disetujui/ditolak oleh node ini
         $existing = \App\Models\DocumentApproval::where('document_id', $document->id)
             ->where('node_wallet_address', $walletLower)
@@ -154,14 +192,28 @@ class DocumentController extends Controller
             ->where('status', 'rejected')
             ->count();
 
-        // Aturan Kuorum
-        // 3 Setuju = disetujui, 2 Tolak = ditolak
-        if ($approvedCount >= 3 && $document->status !== 'disetujui') {
+        // ==============================================================================
+        // [RUMUS MATEMATIKA CONSENSUS RAFT - OFF-CHAIN VERIFICATION]
+        // N = Total seluruh Node/Server yang aktif di jaringan
+        $totalNodes = 4; // Terdiri dari: Dinas Sosial, Dinas Pendidikan, BPBD, Dinas Kesehatan
+        
+        // 1. Rumus Mayoritas Kuorum: Q = floor(N / 2) + 1 (Umum)
+        // User meminta jika sudah 3/4 atau 4/4 disetujui baru statusnya menjadi 'disetujui'
+        $minQuorum = 3;
+        
+        // 2. Rumus Fault Tolerance (Batas Rusak): F = floor((N - 1) / 2)
+        // Jika butuh minimal 3/4 persetujuan, maka toleransi penolakan maksimal adalah 1 node.
+        // Jika yang menolak >= 2 node, maka otomatis berstatus 'ditolak'.
+        $maxRejectionsAllowed = 1;
+        // ==============================================================================
+
+        // Implementasi logika kuorum dengan persetujuan minimal 3/4 node
+        if ($approvedCount >= $minQuorum && $document->status !== 'disetujui') {
             $document->update([
                 'status' => 'disetujui',
                 'tahap_bantuan' => 'Otentikasi Yayasan'
             ]);
-        } else if ($rejectedCount >= 2 && $document->status !== 'ditolak') {
+        } else if ($rejectedCount > $maxRejectionsAllowed && $document->status !== 'ditolak') {
             $document->update([
                 'status' => 'ditolak',
                 'tahap_bantuan' => 'Ditolak Instansi'
@@ -212,93 +264,119 @@ class DocumentController extends Controller
      */
     public function upload(Request $request): JsonResponse
     {
-        // 1. Find file in request
-        $file = null;
-        $possibleKeys = ['file', 'ktp', 'sktm', 'bukti_medis', 'document'];
-        foreach ($possibleKeys as $key) {
-            if ($request->hasFile($key)) {
-                $file = $request->file($key);
-                break;
-            }
-        }
+        // 1. Ambil semua file dalam request
+        $uploadedFiles = [];
+        $jwt = config('services.pinata.jwt');
 
-        if (!$file) {
-            $files = $request->allFiles();
-            if (!empty($files)) {
-                $file = reset($files);
-            }
-        }
-
-        if (!$file) {
+        if (empty($request->allFiles())) {
             return response()->json([
                 'status'  => 'error',
                 'message' => 'Berkas tidak ditemukan. Silakan kirim berkas menggunakan format form-data.'
             ], 400);
         }
 
-        // 2. Validate file (Max 2MB, JPG/PNG/PDF)
-        $validator = Validator::make(['file' => $file], [
-            'file' => 'required|file|max:2048|mimes:jpg,jpeg,png,pdf',
-        ]);
+        foreach ($request->allFiles() as $key => $file) {
+            // Validasi file (maksimal 2MB, JPG/PNG/PDF)
+            $validator = Validator::make(['file' => $file], [
+                'file' => 'required|file|max:2048|mimes:jpg,jpeg,png,pdf',
+            ]);
 
-        if ($validator->fails()) {
-            return response()->json([
-                'status'  => 'error',
-                'message' => 'Validasi gagal: berkas wajib berupa JPG, PNG, atau PDF dengan ukuran maksimal 2MB.',
-                'errors'  => $validator->errors()
-            ], 422);
+            if ($validator->fails()) {
+                return response()->json([
+                    'status'  => 'error',
+                    'message' => "Validasi gagal untuk berkas '$key': berkas wajib berupa JPG, PNG, atau PDF dengan ukuran maksimal 2MB.",
+                    'errors'  => $validator->errors()
+                ], 422);
+            }
+
+            // Upload ke Pinata / mock CID
+            $cid = null;
+            $isMocked = false;
+
+            if (!empty($jwt) && $jwt !== 'your_pinata_jwt_token_here') {
+                try {
+                    $response = Http::withToken($jwt)
+                        ->attach(
+                            'file',
+                            file_get_contents($file->getRealPath()),
+                            $file->getClientOriginalName()
+                        )
+                        ->post('https://api.pinata.cloud/pinning/pinFileToIPFS');
+
+                    if ($response->successful()) {
+                        $resData = $response->json();
+                        $cid  = $resData['IpfsHash'] ?? null;
+                    } else {
+                        Log::error("Pinata Cloud pinning failed for $key: " . $response->body());
+                    }
+                } catch (\Exception $e) {
+                    Log::error("Pinata Cloud pinning exception for $key: " . $e->getMessage());
+                }
+            }
+
+            // Fallback mock CID generation
+            if (empty($cid)) {
+                $isMocked = true;
+                $hash = sha1($file->getClientOriginalName() . time() . $key);
+                $cid  = 'Qm' . substr(str_replace(['+', '/', '='], '', base64_encode(hex2bin($hash))), 0, 44);
+            }
+
+            // Simpan lokal
+            $localPath = $file->store('documents', 'public');
+
+            $uploadedFiles[$key] = [
+                'file_name' => $file->getClientOriginalName(),
+                'file_path' => $localPath,
+                'file_size' => $file->getSize(),
+                'mime_type' => $file->getMimeType(),
+                'ipfs_cid'  => $cid,
+                'is_mocked' => $isMocked,
+            ];
         }
 
-        // 3. Send file to Pinata IPFS
-        $jwt     = config('services.pinata.jwt');
-        $cid     = null;
-        $isMocked = false;
+        // 2. Kumpulkan seluruh data parameter detail kategori
+        $detailFields = [
+            // Kategori Ekonomi
+            'noSktm', 'pendapatan', 'tanggungan',
+            // Kategori Bencana Alam
+            'kerugian', 'koordinat', 'tglBencana',
+            // Kategori Kesehatan
+            'namaRs', 'noRujukan', 'biayaMedis',
+            // Kategori Pendidikan
+            'kampus', 'nim', 'tunggakan',
+            // Umum
+            'tipe', 'programId'
+        ];
 
-        if (!empty($jwt) && $jwt !== 'your_pinata_jwt_token_here') {
-            try {
-                $response = Http::withToken($jwt)
-                    ->attach(
-                        'file',
-                        file_get_contents($file->getRealPath()),
-                        $file->getClientOriginalName()
-                    )
-                    ->post('https://api.pinata.cloud/pinning/pinFileToIPFS');
-
-                if ($response->successful()) {
-                    $data = $response->json();
-                    $cid  = $data['IpfsHash'] ?? null;
-                } else {
-                    Log::error('Pinata Cloud pinning failed: ' . $response->body());
-                }
-            } catch (\Exception $e) {
-                Log::error('Pinata Cloud pinning exception: ' . $e->getMessage());
+        $details = [];
+        foreach ($detailFields as $field) {
+            if ($request->has($field)) {
+                $details[$field] = $request->input($field);
             }
         }
 
-        // Fallback mock CID generation
-        if (empty($cid)) {
-            $isMocked = true;
-            $hash = sha1($file->getClientOriginalName() . time());
-            $cid  = 'Qm' . substr(str_replace(['+', '/', '='], '', base64_encode(hex2bin($hash))), 0, 44);
-        }
+        // Masukkan data file ke dalam details
+        $details['files'] = $uploadedFiles;
 
-        // 4. Save locally as backup and record in DB
-        $localPath = $file->store('documents', 'public');
+        // Ambil file pertama sebagai berkas utama untuk kompatibilitas DB
+        $primaryKey = array_key_first($uploadedFiles);
+        $primaryFile = $uploadedFiles[$primaryKey];
 
-        // Ambil data teks dari form (nama, nik, kategori, dll.)
+        // 3. Simpan data dokumen baru
         $document = Document::create([
             'user_id'        => $request->user()?->id,
-            'file_name'      => $file->getClientOriginalName(),
-            'file_path'      => $localPath,
-            'file_size'      => $file->getSize(),
-            'mime_type'      => $file->getMimeType(),
-            'ipfs_cid'       => $cid,
+            'file_name'      => $primaryFile['file_name'],
+            'file_path'      => $primaryFile['file_path'],
+            'file_size'      => $primaryFile['file_size'],
+            'mime_type'      => $primaryFile['mime_type'],
+            'ipfs_cid'       => $primaryFile['ipfs_cid'],
             // Data pengajuan dari form
             'nama'           => $request->input('nama'),
             'nik'            => $request->input('nik'),
             'kategori'       => $request->input('kategori'),
             'keterangan'     => $request->input('keterangan'),
             'wallet_address' => $request->input('wallet_address'),
+            'details'        => $details,
             'status'         => 'menunggu',
             'tahap_bantuan'  => 'Verifikasi Instansi',
             'signed_by'      => [],
@@ -307,16 +385,15 @@ class DocumentController extends Controller
 
         return response()->json([
             'status'      => 'success',
-            'message'     => $isMocked
-                ? 'Berkas diunggah. CID sementara (mock) dibuat karena Pinata tidak tersedia.'
-                : 'Berkas berhasil diunggah dan di-pin ke IPFS Pinata.',
+            'message'     => 'Berkas persyaratan berhasil diunggah dan direkam di database.',
             'data'        => [
                 'document_id' => $document->id,
-                'cid'         => $cid,
-                'is_mocked'   => $isMocked,
+                'cid'         => $primaryFile['ipfs_cid'],
+                'is_mocked'   => $primaryFile['is_mocked'],
                 'file_name'   => $document->file_name,
                 'file_size'   => $document->file_size,
                 'status'      => $document->status,
+                'details'     => $document->details,
             ],
         ], 201);
     }

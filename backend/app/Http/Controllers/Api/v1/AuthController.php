@@ -22,7 +22,7 @@ class AuthController extends Controller
             'email'         => 'required|string|email|max:255|unique:users',
             'password'      => 'required|string|min:8',
             'role'          => ['nullable', 'string', new Enum(UserRole::class)],
-            'instansi_type' => 'nullable|string|in:dinsos,diknas,bpbd,dinkes',
+            'instansi_type' => 'nullable|string|in:dinsos,diknas,disdik,bpbd,dinkes',
             'wallet_address'=> 'nullable|string',
         ]);
 
