@@ -10,6 +10,7 @@ Route::prefix('v1')->group(function () {
     // Otentikasi pengguna dApp
     Route::post('/auth/register', [AuthController::class, 'register']);
     Route::post('/auth/login',    [AuthController::class, 'login']);
+    Route::get('/public/stats',   [DashboardController::class, 'publicStats']);
 
     // Baca & buat kampanye (PUBLIC — Yayasan bisa publish tanpa token)
     Route::get('/campaigns',  [CampaignController::class, 'index']);

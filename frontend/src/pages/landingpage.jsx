@@ -37,7 +37,7 @@ import {
 } from "lucide-react";
 import { PhilanthropyContext } from "../context/PhilanthropyContext";
 
-const CounterUp = ({ target, duration = 3500, prefix = "", suffix = "" }) => {
+const CounterUp = ({ target, duration = 3500, prefix = "", suffix = "", isDecimal = false }) => {
   const [count, setCount] = useState(0);
   const elementRef = useRef(null);
   const [hasAnimated, setHasAnimated] = useState(false);
@@ -47,7 +47,7 @@ const CounterUp = ({ target, duration = 3500, prefix = "", suffix = "" }) => {
       ([entry]) => {
         if (entry.isIntersecting && !hasAnimated) {
           setHasAnimated(true);
-          const end = parseInt(target.replace(/[^0-9]/g, ""), 10);
+          const end = parseFloat(target) || 0;
           let startTime = null;
 
           const animate = (timestamp) => {
@@ -55,7 +55,7 @@ const CounterUp = ({ target, duration = 3500, prefix = "", suffix = "" }) => {
             const progress = timestamp - startTime;
             const progressRatio = Math.min(progress / duration, 1);
             const easeOutQuad = progressRatio * (2 - progressRatio);
-            const currentCount = Math.floor(easeOutQuad * end);
+            const currentCount = easeOutQuad * end;
 
             setCount(currentCount);
 
@@ -76,12 +76,10 @@ const CounterUp = ({ target, duration = 3500, prefix = "", suffix = "" }) => {
   }, [target, duration, hasAnimated]);
 
   const formatNumber = (num) => {
-    if (target.includes("127.5")) {
-      const end = 127.5;
-      if (num >= end) return "127.5";
+    if (isDecimal) {
       return num.toLocaleString("en-US", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
     }
-    return num.toLocaleString("id-ID");
+    return Math.floor(num).toLocaleString("id-ID");
   };
 
   return (
@@ -99,6 +97,32 @@ export default function LandingPage({ onLoginClick }) {
   const setAuthToken = context?.setAuthToken;
   const VIP_NODES = context?.VIP_NODES || [];
   const setWalletAddress = context?.setWalletAddress;
+
+  const [liveStats, setLiveStats] = useState({
+    total_collected_eth: 127.5,
+    total_beneficiaries: 156,
+    total_campaigns: 42,
+    transparency_percentage: 98.7
+  });
+
+  useEffect(() => {
+    const fetchStats = async () => {
+      try {
+        const baseApiUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api/v1';
+        const response = await fetch(`${baseApiUrl}/public/stats`);
+        if (response.ok) {
+          const resJson = await response.json();
+          if (resJson && resJson.data) {
+            setLiveStats(resJson.data);
+          }
+        }
+      } catch (err) {
+        console.error("Gagal memuat statistik live dari backend:", err);
+      }
+    };
+    fetchStats();
+  }, []);
+
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isDarkMode, setIsDarkMode] = useState(false);
@@ -123,6 +147,48 @@ export default function LandingPage({ onLoginClick }) {
     { name: "Program", href: "#campaign" },
     { name: "Tentang Kami", href: "#tentang-kami" },
   ];
+
+  const campaignsList = (context?.dataProgram && context.dataProgram.length > 0)
+    ? context.dataProgram.slice(0, 3).map(p => ({
+        id: p.id,
+        judul: p.judul || p.title || "Program Bantuan Kemanusiaan",
+        terkumpul: p.terkumpul || 0,
+        targetDonasi: p.targetDonasi || 0,
+        gambar: p.gambar || (() => {
+          const cat = (p.kategori || '').toLowerCase();
+          if (cat.includes('kesehatan')) return imgHealth;
+          if (cat.includes('bencana')) return imgDisaster;
+          if (cat.includes('pendidikan')) return imgEducation;
+          return imgSocial;
+        })(),
+        category: p.kategori || "Ekonomi"
+      }))
+    : [
+        {
+          id: 1,
+          judul: "🏠 Dukungan Panti Asuhan Harapan Bangsa",
+          terkumpul: 0.1,
+          targetDonasi: 0.5,
+          gambar: imgSocial,
+          category: "Ekonomi"
+        },
+        {
+          id: 2,
+          judul: "Bantuan Peralatan Medis untuk Klinik Ekonomi",
+          terkumpul: 2.4,
+          targetDonasi: 4.0,
+          gambar: imgHealth,
+          category: "Kesehatan"
+        },
+        {
+          id: 3,
+          judul: "📚 Program Beasiswa Pendidikan Generasi Cerdas",
+          terkumpul: 1.5,
+          targetDonasi: 3.5,
+          gambar: imgEducation,
+          category: "Pendidikan"
+        }
+      ];
 
   useEffect(() => {
     if (isDarkMode) {
@@ -475,7 +541,7 @@ export default function LandingPage({ onLoginClick }) {
                     Total Donasi Tersalurkan
                   </p>
                   <h3 className="text-xl md:text-2xl font-bold tracking-tight text-emerald-950 dark:text-emerald-100 whitespace-nowrap">
-                    <CounterUp target="127.5" duration={3500} /> ETH 
+                    <CounterUp target={liveStats.total_collected_eth.toString()} isDecimal={true} duration={3500} /> ETH 
                   </h3>
                 </div>
               </div>
@@ -489,7 +555,7 @@ export default function LandingPage({ onLoginClick }) {
                     Penerima Manfaat Terbantu
                   </p>
                   <h3 className="text-xl md:text-2xl font-bold tracking-tight text-emerald-950 dark:text-emerald-100 whitespace-nowrap">
-                    <CounterUp target="156" duration={3500} /> Orang
+                    <CounterUp target={liveStats.total_beneficiaries.toString()} duration={3500} /> Orang
                   </h3>
                 </div>
               </div>
@@ -503,7 +569,7 @@ export default function LandingPage({ onLoginClick }) {
                     Berhasil Tersalurkan
                   </p>
                   <h3 className="text-xl md:text-2xl font-bold tracking-tight text-emerald-950 dark:text-emerald-100 whitespace-nowrap">
-                    <CounterUp target="42" duration={3500} /> Campaign
+                    <CounterUp target={liveStats.total_campaigns.toString()} duration={3500} /> Campaign
                   </h3>
                 </div>
               </div>
@@ -517,7 +583,7 @@ export default function LandingPage({ onLoginClick }) {
                     Transparansi Dana
                   </p>
                   <h3 className="text-xl md:text-2xl font-bold tracking-tight text-emerald-950 dark:text-emerald-100 whitespace-nowrap">
-                    <CounterUp target="98" suffix=".7%" duration={3500} />
+                    <CounterUp target={liveStats.transparency_percentage.toString()} isDecimal={true} suffix="%" duration={3500} />
                   </h3>
                 </div>
               </div>
@@ -782,152 +848,58 @@ export default function LandingPage({ onLoginClick }) {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 items-stretch">
-            {/* CAMPAIGN 1 - Panti Asuhan */}
-            <div className="bg-white dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800 rounded-3xl overflow-hidden shadow-md hover:shadow-xl hover:-translate-y-1 transition-all duration-300 flex flex-col justify-between">
-              <div className="relative h-52 bg-slate-100 dark:bg-slate-800 overflow-hidden shrink-0">
-                <img
-                  src={imgSocial}
-                  alt="Dukungan Panti Asuhan"
-                  className="w-full h-full object-cover transition-transform duration-500 hover:scale-105"
-                />
-                <div className="absolute top-4 right-4 bg-emerald-600/95 backdrop-blur-xs text-white text-[11px] font-bold px-3 py-1.5 rounded-full flex items-center gap-1 shadow-md tracking-wide">
-                  <ShieldCheck size={14} strokeWidth={2.5} />
-                  Blockchain Verified
-                </div>
-              </div>
-
-              <div className="p-6 flex flex-col justify-between flex-1">
-                <div>
-                  <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-4 line-clamp-2 leading-snug">
-                    🏠 Dukungan Panti Asuhan Harapan Bangsa
-                  </h3>
-
-                  <div className="flex justify-between items-end text-xs font-semibold mb-2">
-                    <div className="text-slate-500 dark:text-slate-400">
-                      Terkumpul:{" "}
-                      <span className="text-emerald-600 dark:text-emerald-400 font-bold block text-sm mt-0.5">
-                        0.1 ETH
-                      </span>
-                    </div>
-                    <div className="text-right text-slate-500 dark:text-slate-400">
-                      Target:{" "}
-                      <span className="text-slate-900 dark:text-white font-bold block text-sm mt-0.5">
-                        0.5 ETH
-                      </span>
+            {campaignsList.map((camp) => {
+              const percent = Math.min(((camp.terkumpul || 0) / (camp.targetDonasi || 1)) * 100, 100);
+              return (
+                <div key={camp.id} className="bg-white dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800 rounded-3xl overflow-hidden shadow-md hover:shadow-xl hover:-translate-y-1 transition-all duration-300 flex flex-col justify-between">
+                  <div className="relative h-52 bg-slate-100 dark:bg-slate-800 overflow-hidden shrink-0">
+                    <img
+                      src={camp.gambar}
+                      alt={camp.judul}
+                      className="w-full h-full object-cover transition-transform duration-500 hover:scale-105"
+                    />
+                    <div className="absolute top-4 right-4 bg-emerald-600/95 backdrop-blur-xs text-white text-[11px] font-bold px-3 py-1.5 rounded-full flex items-center gap-1 shadow-md tracking-wide">
+                      <ShieldCheck size={14} strokeWidth={2.5} />
+                      Blockchain Verified
                     </div>
                   </div>
 
-                  <div className="w-full h-2.5 bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden mb-6">
-                    <div
-                      className="h-full bg-emerald-600 dark:bg-emerald-500 rounded-full transition-all duration-500"
-                      style={{ width: "40%" }}
-                    ></div>
-                  </div>
-                </div>
+                  <div className="p-6 flex flex-col justify-between flex-1">
+                    <div>
+                      <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-4 line-clamp-2 leading-snug">
+                        {camp.judul}
+                      </h3>
 
-                <button onClick={triggerWalletBlink} className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 dark:bg-emerald-600 dark:hover:bg-emerald-500 text-white font-bold rounded-xl flex items-center justify-center gap-2 shadow-lg shadow-emerald-600/20 active:scale-[0.98] transition-all">
-                  DONASI <Coins size={16} />
-                </button>
-              </div>
-            </div>
+                      <div className="flex justify-between items-end text-xs font-semibold mb-2">
+                        <div className="text-slate-500 dark:text-slate-400">
+                          Terkumpul:{" "}
+                          <span className="text-emerald-600 dark:text-emerald-400 font-bold block text-sm mt-0.5">
+                            {camp.terkumpul} ETH
+                          </span>
+                        </div>
+                        <div className="text-right text-slate-500 dark:text-slate-400">
+                          Target:{" "}
+                          <span className="text-slate-900 dark:text-white font-bold block text-sm mt-0.5">
+                            {camp.targetDonasi} ETH
+                          </span>
+                        </div>
+                      </div>
 
-            {/* CAMPAIGN 2 - Peralatan Medis */}
-            <div className="bg-white dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800 rounded-3xl overflow-hidden shadow-md hover:shadow-xl hover:-translate-y-1 transition-all duration-300 flex flex-col justify-between">
-              <div className="relative h-52 bg-slate-100 dark:bg-slate-800 overflow-hidden shrink-0">
-                <img
-                  src={imgHealth}
-                  alt="Bantuan Peralatan Medis"
-                  className="w-full h-full object-cover transition-transform duration-500 hover:scale-105"
-                />
-                <div className="absolute top-4 right-4 bg-emerald-600/95 backdrop-blur-xs text-white text-[11px] font-bold px-3 py-1.5 rounded-full flex items-center gap-1 shadow-md tracking-wide">
-                  <ShieldCheck size={14} strokeWidth={2.5} />
-                  Blockchain Verified
-                </div>
-              </div>
-
-              <div className="p-6 flex flex-col justify-between flex-1">
-                <div>
-                  <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-4 line-clamp-2 leading-snug">
-                    Bantuan Peralatan Medis untuk Klinik Ekonomi
-                  </h3>
-
-                  <div className="flex justify-between items-end text-xs font-semibold mb-2">
-                    <div className="text-slate-500 dark:text-slate-400">
-                      Terkumpul:{" "}
-                      <span className="text-emerald-600 dark:text-emerald-400 font-bold block text-sm mt-0.5">
-                        2.4 ETH
-                      </span>
+                      <div className="w-full h-2.5 bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden mb-6">
+                        <div
+                          className="h-full bg-emerald-600 dark:bg-emerald-500 rounded-full transition-all duration-500"
+                          style={{ width: `${percent}%` }}
+                        ></div>
+                      </div>
                     </div>
-                    <div className="text-right text-slate-500 dark:text-slate-400">
-                      Target:{" "}
-                      <span className="text-slate-900 dark:text-white font-bold block text-sm mt-0.5">
-                        4.0 ETH
-                      </span>
-                    </div>
-                  </div>
 
-                  <div className="w-full h-2.5 bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden mb-6">
-                    <div
-                      className="h-full bg-emerald-600 dark:bg-emerald-500 rounded-full transition-all duration-500"
-                      style={{ width: "60%" }}
-                    ></div>
+                    <button onClick={triggerWalletBlink} className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 dark:bg-emerald-600 dark:hover:bg-emerald-500 text-white font-bold rounded-xl flex items-center justify-center gap-2 shadow-lg shadow-emerald-600/20 active:scale-[0.98] transition-all">
+                      DONASI <Coins size={16} />
+                    </button>
                   </div>
                 </div>
-
-                <button onClick={triggerWalletBlink} className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 dark:bg-emerald-600 dark:hover:bg-emerald-500 text-white font-bold rounded-xl flex items-center justify-center gap-2 shadow-lg shadow-emerald-600/20 active:scale-[0.98] transition-all">
-                  DONASI <Coins size={16} />
-                </button>
-              </div>
-            </div>
-
-            {/* CAMPAIGN 3 - Beasiswa Pendidikan */}
-            <div className="bg-white dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800 rounded-3xl overflow-hidden shadow-md hover:shadow-xl hover:-translate-y-1 transition-all duration-300 flex flex-col justify-between">
-              <div className="relative h-52 bg-slate-100 dark:bg-slate-800 overflow-hidden shrink-0">
-                <img
-                  src={imgEducation}
-                  alt="Program Beasiswa Pendidikan"
-                  className="w-full h-full object-cover transition-transform duration-500 hover:scale-105"
-                />
-                <div className="absolute top-4 right-4 bg-emerald-600/95 backdrop-blur-xs text-white text-[11px] font-bold px-3 py-1.5 rounded-full flex items-center gap-1 shadow-md tracking-wide">
-                  <ShieldCheck size={14} strokeWidth={2.5} />
-                  Blockchain Verified
-                </div>
-              </div>
-
-              <div className="p-6 flex flex-col justify-between flex-1">
-                <div>
-                  <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-4 line-clamp-2 leading-snug">
-                    📚 Program Beasiswa Pendidikan Generasi Cerdas
-                  </h3>
-
-                  <div className="flex justify-between items-end text-xs font-semibold mb-2">
-                    <div className="text-slate-500 dark:text-slate-400">
-                      Terkumpul:{" "}
-                      <span className="text-emerald-600 dark:text-emerald-400 font-bold block text-sm mt-0.5">
-                        1.5 ETH
-                      </span>
-                    </div>
-                    <div className="text-right text-slate-500 dark:text-slate-400">
-                      Target:{" "}
-                      <span className="text-slate-900 dark:text-white font-bold block text-sm mt-0.5">
-                        3.5 ETH
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="w-full h-2.5 bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden mb-6">
-                    <div
-                      className="h-full bg-emerald-600 dark:bg-emerald-500 rounded-full transition-all duration-500"
-                      style={{ width: "50%" }}
-                    ></div>
-                  </div>
-                </div>
-
-                <button onClick={triggerWalletBlink} className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 dark:bg-emerald-600 dark:hover:bg-emerald-500 text-white font-bold rounded-xl flex items-center justify-center gap-2 shadow-lg shadow-emerald-600/20 active:scale-[0.98] transition-all">
-                  DONASI <Coins size={16} />
-                </button>
-              </div>
-            </div>
+              );
+            })}
           </div>
         </div>
       </section>
