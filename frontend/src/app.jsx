@@ -44,7 +44,11 @@ function AppRouter() {
       } else if (roleLower === 'penerima') {
         expectedHash = '#/penerima';
       } else if (roleLower === 'donatur') {
-        expectedHash = '#/donatur';
+        if (currentHash === '#/penerima') {
+          expectedHash = '#/penerima';
+        } else {
+          expectedHash = '#/donatur';
+        }
       }
 
       // Redirect if current page does not match expected role page

@@ -671,7 +671,7 @@ export const PhilanthropyProvider = ({ children }) => {
       dataDonatur, setDataDonatur,
       riwayatAktivitasGlobal,
       // Auth
-      apiToken, userRole, instansiType, currentUser, setCurrentUser, setAuthToken, logout,
+      apiToken, userRole, setUserRole, instansiType, currentUser, setCurrentUser, setAuthToken, logout,
       // Wallet
       walletAddress, setWalletAddress, walletBalance, connectWallet, VIP_NODES,
       // Notifikasi

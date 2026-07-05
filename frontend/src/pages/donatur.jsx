@@ -792,7 +792,8 @@ const DonaturPage = ({ onLogoutClick = () => {} }) => {
     isLoadingCampaigns, 
     campaignsError, 
     fetchCampaigns,
-    riwayatAktivitasGlobal = []
+    riwayatAktivitasGlobal = [],
+    setUserRole
   } = useContext(PhilanthropyContext) || {};
 
   const [isSubmittingPengajuan, setIsSubmittingPengajuan] = useState(false);
@@ -935,7 +936,8 @@ const DonaturPage = ({ onLogoutClick = () => {} }) => {
 
   const renderBantuanButtonText = () => {
     if (bantuanStatus === 'pending') return 'Menunggu Verifikasi';
-    if (bantuanStatus === 'verified') return 'Penerima (Terverifikasi)';
+    if (bantuanStatus === 'verified') return 'Terverifikasi & Lihat Status';
+    if (bantuanStatus === 'rejected') return 'Pengajuan Ditolak';
     return 'Ajukan Bantuan';
   };
 
@@ -1004,6 +1006,10 @@ const DonaturPage = ({ onLogoutClick = () => {} }) => {
           <button
             onClick={() => {
               if (bantuanStatus === 'verified') {
+                if (setUserRole) {
+                  setUserRole('penerima');
+                  localStorage.setItem('user_role', 'penerima');
+                }
                 window.location.hash = '#/penerima';
               } else if (bantuanStatus === 'idle') {
                 setShowFormModal(true);

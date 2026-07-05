@@ -28,7 +28,7 @@ export default function PenerimaPage({ onLogoutClick = () => {} }) {
   if (!context) {
     return <div className="min-h-screen flex items-center justify-center">Loading context...</div>;
   }
-  const { currentUser, dataPengajuan, ajukanBantuan, dataProgram, dataDonatur, updateTahapBantuan, riwayatAktivitasGlobal, walletAddress, unreadNotifs, markNotifsRead, catatAktivitas } = context;
+  const { currentUser, dataPengajuan, ajukanBantuan, dataProgram, dataDonatur, updateTahapBantuan, riwayatAktivitasGlobal, walletAddress, unreadNotifs, markNotifsRead, catatAktivitas, setUserRole } = context;
   const [alertMsg, setAlertMsg] = useState(null);
 
   const [activeTab, setActiveTab] = useState("beranda");
@@ -192,6 +192,20 @@ export default function PenerimaPage({ onLogoutClick = () => {} }) {
           ))}
         </nav>
 
+        {currentUser?.role === 'donatur' && (
+          <button 
+            onClick={() => {
+              if (setUserRole) {
+                setUserRole('donatur');
+                localStorage.setItem('user_role', 'donatur');
+              }
+              window.location.hash = '#/donatur';
+            }} 
+            className="flex items-center gap-3 p-4 text-emerald-600 dark:text-emerald-400 font-bold text-sm hover:text-emerald-800 transition shadow-none"
+          >
+            <ArrowLeft size={18}/> Kembali ke Donatur
+          </button>
+        )}
         <button onClick={onLogoutClick} className="flex items-center gap-3 p-4 text-gray-500 font-bold text-sm hover:text-rose-600 transition"><LogOut size={18}/> Keluar</button>
       </aside>
 
