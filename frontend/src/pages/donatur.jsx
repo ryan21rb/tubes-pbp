@@ -731,6 +731,12 @@ const DonaturPage = ({ onLogoutClick = () => {} }) => {
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [submissionStatus, setSubmissionStatus] = useState(null);
   const [alertMsg, setAlertMsg] = useState(null);
+  const [activeMenu, setActiveMenu] = useState('Beranda');
+  const [bantuanStatus, setBantuanStatus] = useState('idle'); // idle, pending, verified
+  const [showFormModal, setShowFormModal] = useState(false);
+  const [formStep, setFormStep] = useState(1);
+  const [formData, setFormData] = useState({ kategori: "Ekonomi" });
+  const [fileData, setFileData] = useState({});
 
   useEffect(() => {
     if (isDarkMode) {
@@ -744,8 +750,21 @@ const DonaturPage = ({ onLogoutClick = () => {} }) => {
     const fetchMyStatus = async () => {
       try {
         const res = await apiGetMyDocumentStatus();
-        if (res?.data?.status === 'success' && res.data.data) {
-          setSubmissionStatus(res.data.data.status);
+        if (res?.status === 'success' && res.data) {
+          const statusVal = (res.data.status || '').toLowerCase();
+          const t = (res.data.tahap_bantuan || '').toLowerCase();
+          
+          setSubmissionStatus(statusVal);
+          
+          if (statusVal === 'disetujui' || statusVal === 'zkp_validated' || t === 'cairkan dana' || t === 'selesai' || t === 'otentikasi yayasan') {
+            setBantuanStatus('verified');
+          } else if (statusVal === 'menunggu' || t === 'verifikasi instansi') {
+            setBantuanStatus('pending');
+          } else if (statusVal === 'ditolak') {
+            setBantuanStatus('rejected');
+          } else {
+            setBantuanStatus('idle');
+          }
         }
       } catch (err) {
         // fail silently for polling
@@ -760,6 +779,7 @@ const DonaturPage = ({ onLogoutClick = () => {} }) => {
 
   // === CAMPAIGNS & PRAYERS dari PhilanthropyContext (data API) ===
   const { 
+    currentUser,
     dataPengajuan = [],
     dataProgram, 
     dataDonatur, 
@@ -831,13 +851,6 @@ const DonaturPage = ({ onLogoutClick = () => {} }) => {
   const handleAamiin = (id) => {
     setPrayers(prev => prev.map(p => p.id === id ? { ...p, aamiin: p.aamiin + 1 } : p));
   };
-  
-  const [activeMenu, setActiveMenu] = useState('Beranda');
-  const [bantuanStatus, setBantuanStatus] = useState('idle'); // idle, pending, verified
-  const [showFormModal, setShowFormModal] = useState(false);
-  const [formStep, setFormStep] = useState(1);
-  const [formData, setFormData] = useState({ kategori: "Ekonomi" });
-  const [fileData, setFileData] = useState({});
   const programTersedia = dataProgram ? dataProgram.filter(p => (p.kategori === formData.kategori || p.category === formData.kategori) && p.status === "Berjalan") : [];
   
   const [showEditProfile, setShowEditProfile] = useState(false);
@@ -845,7 +858,22 @@ const DonaturPage = ({ onLogoutClick = () => {} }) => {
   const [filterTag, setFilterTag] = useState('Semua');
   const [bookmarkedCampaigns, setBookmarkedCampaigns] = useState([1, 4]);
   const [myDonatedCampaigns, setMyDonatedCampaigns] = useState([1, 2, 6]);
-  const [userProfile, setUserProfile] = useState({ name: "Budi Santoso", email: "budi.santoso@email.com", avatar: null });
+  const [userProfile, setUserProfile] = useState(() => ({
+    name: currentUser?.name || "Budi Santoso",
+    email: currentUser?.email || "budi.santoso@email.com",
+    avatar: null
+  }));
+
+  useEffect(() => {
+    if (currentUser) {
+      setUserProfile(prev => ({
+        ...prev,
+        name: currentUser.name || prev.name,
+        email: currentUser.email || prev.email,
+      }));
+    }
+  }, [currentUser]);
+
   const [userPrayers, setUserPrayers] = useState([
     { text: "Sedikit rezeki semoga bisa membantu beban saudara kita di sana.", campaign: "Pembangunan Hunian Sementara Cianjur" }
   ]);

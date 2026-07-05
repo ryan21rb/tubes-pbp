@@ -19,6 +19,14 @@ export const PhilanthropyProvider = ({ children }) => {
   const [apiToken, setApiToken] = useState(() => localStorage.getItem('auth_token'));
   const [userRole, setUserRole] = useState(() => localStorage.getItem('user_role'));
   const [instansiType, setInstansiType] = useState(() => localStorage.getItem('instansi_type'));
+  const [currentUser, setCurrentUser] = useState(() => {
+    const saved = localStorage.getItem('current_user');
+    try {
+      return saved ? JSON.parse(saved) : null;
+    } catch (e) {
+      return null;
+    }
+  });
 
   // --- STATE PENGAJUAN BANTUAN ---
   const [dataPengajuan, setDataPengajuan] = useState([]);
@@ -194,23 +202,21 @@ export const PhilanthropyProvider = ({ children }) => {
       const handleAccountsChanged = async (accounts) => {
         if (accounts.length > 0) {
           const address = accounts[0].toLowerCase();
+          const isVip = VIP_NODES.map(v => v.toLowerCase()).includes(address);
           
-          // Cek jika user login sebagai VIP
-          const storedToken = localStorage.getItem('auth_token');
-          if (storedToken === 'vip_bypass') {
-            const isVip = VIP_NODES.map(v => v.toLowerCase()).includes(address);
-            if (isVip) {
-              // Tentukan role berdasarkan wallet baru secara dinamis
-              const newRole = address === '0x507610fdf65637c1752657664dfea2865e589b88' ? 'yayasan' : 'instansi';
-              localStorage.setItem('user_role', newRole);
-              setUserRole(newRole);
-              
-              // Arahkan ke hash halaman yang sesuai
-              window.location.hash = newRole === 'yayasan' ? '#/yayasan' : '#/instansi';
-            } else {
+          if (isVip) {
+            // Tentukan role berdasarkan wallet baru secara dinamis & bypass login
+            const newRole = address === '0x507610fdf65637c1752657664dfea2865e589b88' ? 'yayasan' : 'instansi';
+            setAuthToken('vip_bypass', newRole);
+            
+            // Arahkan ke hash halaman yang sesuai
+            window.location.hash = newRole === 'yayasan' ? '#/yayasan' : '#/instansi';
+          } else {
+            // Jika akun bukan VIP butuh login biasa. Jika sebelumnya login bypass VIP, hapus sesi bypass
+            const storedToken = localStorage.getItem('auth_token');
+            if (storedToken === 'vip_bypass') {
               await logout();
               window.location.hash = '#/';
-              return;
             }
           }
 
@@ -219,6 +225,7 @@ export const PhilanthropyProvider = ({ children }) => {
             const balanceWei = await provider.getBalance(address);
             const balanceEth = parseFloat(ethers.formatEther(balanceWei));
             setWalletAddress(address);
+            localStorage.setItem('connected_wallet', address);
             setWalletBalance(balanceEth);
           } catch (e) {
             console.error(e);
@@ -250,16 +257,19 @@ export const PhilanthropyProvider = ({ children }) => {
           const accounts = await provider.send('eth_accounts', []);
           if (accounts.length > 0) {
             const address = accounts[0].toLowerCase();
+            const isVip = VIP_NODES.map(v => v.toLowerCase()).includes(address);
             
-            // Cek jika user login sebagai VIP
-            const storedToken = localStorage.getItem('auth_token');
-            if (storedToken === 'vip_bypass') {
-              const isVip = VIP_NODES.map(v => v.toLowerCase()).includes(address);
-              if (isVip) {
-                const newRole = address === '0x507610fdf65637c1752657664dfea2865e589b88' ? 'yayasan' : 'instansi';
-                localStorage.setItem('user_role', newRole);
-                setUserRole(newRole);
-              } else {
+            if (isVip) {
+              const newRole = address === '0x507610fdf65637c1752657664dfea2865e589b88' ? 'yayasan' : 'instansi';
+              const storedToken = localStorage.getItem('auth_token');
+              if (storedToken !== 'vip_bypass') {
+                setAuthToken('vip_bypass', newRole);
+                window.location.hash = newRole === 'yayasan' ? '#/yayasan' : '#/instansi';
+              }
+            } else {
+              // Jika wallet aktif bukan VIP tapi token yang tersimpan adalah 'vip_bypass', paksa logout
+              const storedToken = localStorage.getItem('auth_token');
+              if (storedToken === 'vip_bypass') {
                 await logout();
                 window.location.hash = '#/';
                 return;
@@ -269,6 +279,7 @@ export const PhilanthropyProvider = ({ children }) => {
             const balanceWei = await provider.getBalance(address);
             const balanceEth = parseFloat(ethers.formatEther(balanceWei));
             setWalletAddress(address);
+            localStorage.setItem('connected_wallet', address);
             setWalletBalance(balanceEth);
           } else {
             // Log out jika tidak ada wallet terhubung padahal login VIP
@@ -348,6 +359,7 @@ export const PhilanthropyProvider = ({ children }) => {
         const balanceWei = await provider.getBalance(address);
         const balanceEth = parseFloat(ethers.formatEther(balanceWei));
         setWalletAddress(address);
+        localStorage.setItem('connected_wallet', address);
         setWalletBalance(balanceEth);
         // Fetch dashboard stats setelah wallet konek (jika sudah punya token)
         if (apiToken) {
@@ -367,13 +379,20 @@ export const PhilanthropyProvider = ({ children }) => {
   // ============================================================
   // SIMPAN TOKEN SETELAH LOGIN (dipanggil dari LandingPage)
   // ============================================================
-  const setAuthToken = (token, role, instansiType = null) => {
+  const setAuthToken = (token, role, instansiType = null, user = null) => {
     localStorage.setItem('auth_token', token);
     if (role) localStorage.setItem('user_role', role);
     if (instansiType) {
       localStorage.setItem('instansi_type', instansiType);
     } else {
       localStorage.removeItem('instansi_type');
+    }
+    if (user) {
+      localStorage.setItem('current_user', JSON.stringify(user));
+      setCurrentUser(user);
+    } else {
+      localStorage.removeItem('current_user');
+      setCurrentUser(null);
     }
     setApiToken(token);
     setUserRole(role);
@@ -392,11 +411,14 @@ export const PhilanthropyProvider = ({ children }) => {
       localStorage.removeItem('auth_token');
       localStorage.removeItem('user_role');
       localStorage.removeItem('instansi_type');
+      localStorage.removeItem('current_user');
       setApiToken(null);
       setUserRole(null);
       setInstansiType(null);
+      setCurrentUser(null);
       setDashboardStats(null);
       setWalletAddress('');
+      localStorage.removeItem('connected_wallet');
       setWalletBalance(0);
     }
   };
@@ -544,12 +566,29 @@ export const PhilanthropyProvider = ({ children }) => {
 
   const tambahProgram = async (programBaru) => {
     try {
+      let finalImageUrl = programBaru.image;
+      if (programBaru.imageFile instanceof File) {
+        try {
+          const multipart = new FormData();
+          multipart.append('file', programBaru.imageFile);
+          
+          const response = await apiUploadDocument(multipart);
+          const { cid } = response.data || {};
+          if (cid) {
+            finalImageUrl = `https://yellow-causal-cardinal-982.mypinata.cloud/ipfs/${cid}`;
+            console.log("Program image successfully pinned to IPFS Pinata:", finalImageUrl);
+          }
+        } catch (uploadErr) {
+          console.error("Failed to upload program image to IPFS Pinata:", uploadErr);
+        }
+      }
+
       const payload = {
         title: programBaru.judul || programBaru.title,
         description: programBaru.desc || programBaru.deskripsi || "Program Bantuan Ekonomi Kemanusiaan",
         category: programBaru.kategori || programBaru.category,
         target_donation: programBaru.targetDonasi || programBaru.target,
-        image_url: programBaru.image || null
+        image_url: finalImageUrl
       };
       await apiCreateCampaign(payload);
       // Re-fetch all campaigns from backend to ensure data sync
@@ -632,7 +671,7 @@ export const PhilanthropyProvider = ({ children }) => {
       dataDonatur, setDataDonatur,
       riwayatAktivitasGlobal,
       // Auth
-      apiToken, userRole, instansiType, setAuthToken, logout,
+      apiToken, userRole, instansiType, currentUser, setCurrentUser, setAuthToken, logout,
       // Wallet
       walletAddress, setWalletAddress, walletBalance, connectWallet, VIP_NODES,
       // Notifikasi

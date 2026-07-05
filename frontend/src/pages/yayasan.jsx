@@ -81,7 +81,7 @@ const ChartAnimation = () => {
 
 /* 1) BERANDA */
 const DashboardView = ({ campaigns, onAction }) => {
-  const { nodeStatuses = [], dataPengajuan = [] } = React.useContext(PhilanthropyContext) || {};
+  const { currentUser, nodeStatuses = [], dataPengajuan = [] } = React.useContext(PhilanthropyContext) || {};
   const totalCollected = campaigns.reduce((s, c) => s + c.collected, 0);
   const activeCampaigns = campaigns.filter((c) => c.status === 'Aktif').length;
   const totalRecipients = campaigns.reduce((s, c) => s + c.recipients, 0);
@@ -111,7 +111,7 @@ const DashboardView = ({ campaigns, onAction }) => {
     <div className="space-y-6 max-w-[1440px]">
       {/* Title */}
       <div>
-        <p className="text-base font-medium text-gray-500 dark:text-slate-400 mt-1">Yayasan Ruang Peduli Bersama</p>
+        <p className="text-base font-medium text-gray-500 dark:text-slate-400 mt-1">{currentUser?.name || "Yayasan Ruang Peduli Bersama"}</p>
       </div>
 
       {/* Raft Consensus Status */}
@@ -547,7 +547,7 @@ const VerificationView = ({ queue, onVerify, onAction }) => {
                   ID Pengajuan: <span className="font-mono font-bold text-emerald-700 dark:text-emerald-400">{activeItem.id}</span>
                   <br />
                   Dokumen IPFS (Pinata): {activeItem.cid ? (
-                    <a href={`https://gateway.pinata.cloud/ipfs/${activeItem.cid}`} target="_blank" rel="noopener noreferrer" className="font-mono font-bold text-blue-600 dark:text-blue-400 hover:underline">
+                    <a href={`https://yellow-causal-cardinal-982.mypinata.cloud/ipfs/${activeItem.cid}`} target="_blank" rel="noopener noreferrer" className="font-mono font-bold text-blue-600 dark:text-blue-400 hover:underline">
                       {activeItem.cid.substring(0, 8)}...{activeItem.cid.substring(activeItem.cid.length - 8)} <ExternalLink size={10} className="inline mb-0.5" />
                     </a>
                   ) : (
@@ -772,8 +772,11 @@ const VerificationView = ({ queue, onVerify, onAction }) => {
                 <button 
                   onClick={() => {
                     console.log("Memanggil API/Smart Contract untuk menyalurkan dana ke:", activeItem);
+                    if (context && context.updateTahapBantuan) {
+                      context.updateTahapBantuan(activeItem.id, "Selesai");
+                    }
                     setShowDistributeZkp(false);
-                    setBanner("Dana berhasil didistribusikan! (Cek console log)");
+                    setBanner("Dana berhasil didistribusikan!");
                   }}
                   className="w-full bg-emerald-600 text-white font-bold py-4 rounded-xl hover:bg-emerald-700 transition flex items-center justify-center gap-2 shadow-lg shadow-emerald-600/30"
                 >
@@ -987,6 +990,8 @@ const YayasanPage = ({ onLogoutClick = () => {} }) => {
   const context = React.useContext(PhilanthropyContext);
   const dataProgram = context?.dataProgram || [];
   const dataPengajuan = context?.dataPengajuan || [];
+  const currentUser = context?.currentUser;
+  const walletAddress = context?.walletAddress;
 
   // ─── Campaign State (Sinkronisasi Real-Time dengan Backend dataProgram) ───
   const [campaigns, setCampaigns] = useState([
@@ -1022,7 +1027,7 @@ const YayasanPage = ({ onLogoutClick = () => {} }) => {
     }
   }, [context?.fetchDocuments]);
 
-  const zkpQueue = dataPengajuan.filter(p => p.status === 'disetujui').map(p => ({
+  const zkpQueue = dataPengajuan.filter(p => (p.status === 'disetujui' || p.status === 'zkp_validated') && p.tahapBantuan !== 'Selesai').map(p => ({
     id: p.id,
     kategori: p.kategori,
     nik: p.nik,
@@ -1112,6 +1117,7 @@ const YayasanPage = ({ onLogoutClick = () => {} }) => {
       endDate: createForm.endDate,
       foundationName: createForm.foundationName,
       image: campaignImage,
+      imageFile: createForm.image,
     };
     setCampaigns((p) => [nc, ...p]);
     if (context && context.tambahProgram) {
@@ -1428,15 +1434,15 @@ const YayasanPage = ({ onLogoutClick = () => {} }) => {
                     </div>
                     <div>
                       <label className="text-xs font-bold text-gray-700 dark:text-slate-300 uppercase mb-1.5 block">Nama Pengelola (Dapat Diedit)</label>
-                      <input type="text" defaultValue="Admin Yayasan" className="w-full px-4 py-2.5 bg-gray-50 dark:bg-slate-800/50 border border-gray-200 dark:border-slate-700 rounded-xl text-sm text-gray-900 dark:text-slate-100 focus:outline-none focus:border-emerald-600 dark:focus:border-emerald-500" />
+                      <input type="text" defaultValue={currentUser?.name || "Admin Yayasan"} className="w-full px-4 py-2.5 bg-gray-50 dark:bg-slate-800/50 border border-gray-200 dark:border-slate-700 rounded-xl text-sm text-gray-900 dark:text-slate-100 focus:outline-none focus:border-emerald-600 dark:focus:border-emerald-500" />
                     </div>
                     <div>
                       <label className="text-xs font-bold text-gray-700 dark:text-slate-300 uppercase mb-1.5 block">Nama Yayasan (Tidak Dapat Diedit)</label>
-                      <input type="text" value="Yayasan Ruang Peduli Bersama" disabled className="w-full px-4 py-2.5 bg-gray-200 dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-xl text-smS text-gray-500 dark:text-slate-400 cursor-not-allowed" />
+                      <input type="text" value={currentUser?.name || "Yayasan Ruang Peduli Bersama"} disabled className="w-full px-4 py-2.5 bg-gray-200 dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-xl text-smS text-gray-500 dark:text-slate-400 cursor-not-allowed" />
                     </div>
                     <div>
                       <label className="text-xs font-bold text-gray-700 dark:text-slate-300 uppercase mb-1.5 block">Alamat E-Wallet</label>
-                      <input type="text" defaultValue="0xf39F...2266" className="w-full px-4 py-2.5 bg-gray-50 dark:bg-slate-800/50 border border-gray-200 dark:border-slate-700 rounded-xl text-sm text-gray-900 dark:text-slate-100 focus:outline-none focus:border-emerald-600 dark:focus:border-emerald-500 font-mono" />
+                      <input type="text" defaultValue={walletAddress || "0xf39F...2266"} className="w-full px-4 py-2.5 bg-gray-50 dark:bg-slate-800/50 border border-gray-200 dark:border-slate-700 rounded-xl text-sm text-gray-900 dark:text-slate-100 focus:outline-none focus:border-emerald-600 dark:focus:border-emerald-500 font-mono" />
                     </div>
                     <button type="submit" className="w-full py-4 bg-emerald-700 text-white rounded-xl font-bold shadow-lg hover:bg-emerald-800 transition mt-4">
                       Simpan Perubahan

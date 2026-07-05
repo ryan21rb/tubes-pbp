@@ -9,6 +9,7 @@ use Illuminate\Validation\Rules\Enum;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
+use App\Services\JwtService;
 
 class AuthController extends Controller
 {
@@ -35,7 +36,7 @@ class AuthController extends Controller
             'wallet_address' => $validated['wallet_address'] ?? null,
         ]);
 
-        $token = $user->createToken('auth_token')->plainTextToken;
+        $token = JwtService::generateToken($user);
 
         return response()->json([
             'status'         => 'success',
@@ -43,7 +44,7 @@ class AuthController extends Controller
             'access_token'   => $token,
             'token_type'     => 'Bearer',
             'user'           => $user,
-            'role'           => $user->role,
+            'role'           => $user->role->value ?? $user->role,
             'instansi_type'  => $user->instansi_type,
         ], 201);
     }
@@ -67,7 +68,7 @@ class AuthController extends Controller
             ], 401);
         }
 
-        $token = $user->createToken('auth_token')->plainTextToken;
+        $token = JwtService::generateToken($user);
 
         return response()->json([
             'status'        => 'success',
@@ -75,7 +76,7 @@ class AuthController extends Controller
             'access_token'  => $token,
             'token_type'    => 'Bearer',
             'user'          => $user,
-            'role'          => $user->role,
+            'role'          => $user->role->value ?? $user->role,
             'instansi_type' => $user->instansi_type,
         ]);
     }
@@ -85,8 +86,7 @@ class AuthController extends Controller
      */
     public function logout(Request $request): JsonResponse
     {
-        $request->user()->currentAccessToken()->delete();
-
+        // JWT is stateless, so we just return success
         return response()->json([
             'status'  => 'success',
             'message' => 'Logout berhasil, token telah dicabut',

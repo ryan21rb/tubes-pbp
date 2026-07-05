@@ -46,6 +46,7 @@ export default function ValidatorDashboard({ onLogoutClick = () => {} }) {
   const [alertMsg, setAlertMsg] = useState(null);
 
   const context = useContext(PhilanthropyContext) || {};
+  const { currentUser, dataPengajuan = [], updateStatusPengajuan, voteDocument, fetchDocuments, riwayatAktivitasGlobal = [], catatAktivitas, walletAddress, nodeStatuses } = context;
   const instansiTypeFromAuth = context.instansiType || localStorage.getItem('instansi_type');
   
   const typeMap = {
@@ -62,11 +63,14 @@ export default function ValidatorDashboard({ onLogoutClick = () => {} }) {
   const [editNameVal, setEditNameVal] = useState(initialProfileName);
 
   useEffect(() => {
-    if (instansiTypeFromAuth && typeMap[instansiTypeFromAuth]) {
+    if (currentUser) {
+      setProfileName(currentUser.name || initialProfileName);
+      setEditNameVal(currentUser.name || initialProfileName);
+    } else if (instansiTypeFromAuth && typeMap[instansiTypeFromAuth]) {
       setProfileName(typeMap[instansiTypeFromAuth]);
       setEditNameVal(typeMap[instansiTypeFromAuth]);
     }
-  }, [instansiTypeFromAuth]);
+  }, [currentUser, instansiTypeFromAuth]);
 
   // State real-time timestamp off untuk Node yang pasif
   const [nodeOfflineStartTimes] = useState({
@@ -82,7 +86,6 @@ export default function ValidatorDashboard({ onLogoutClick = () => {} }) {
   }, []);
 
   // ====== DATA MASTER STATE JALUR PIPELINE (100% REAL & DINAMIS) ======
-  const { dataPengajuan = [], updateStatusPengajuan, voteDocument, fetchDocuments, riwayatAktivitasGlobal = [], catatAktivitas, walletAddress, nodeStatuses } = useContext(PhilanthropyContext) || {};
 
   // LOCAL STATE WRAPPER: Agar UI langsung berubah cepat saat tombol diklik tanpa nunggu delay context
   const [localPengajuan, setLocalPengajuan] = useState([]);
@@ -1003,7 +1006,7 @@ export default function ValidatorDashboard({ onLogoutClick = () => {} }) {
             <div>
               <label className="text-xs font-bold text-gray-500 uppercase tracking-widest">E-Wallet Metamask Terhubung</label>
               <div className="w-full mt-2 p-3.5 rounded-xl border border-gray-200 dark:border-slate-700 bg-gray-100 dark:bg-slate-800 font-mono font-bold text-gray-400 dark:text-slate-500 text-sm cursor-not-allowed truncate select-none">
-                {NODE_IDENTITIES[profileName]?.address || "0x..."}
+                {walletAddress || NODE_IDENTITIES[profileName]?.address || "0x..."}
               </div>
             </div>
             

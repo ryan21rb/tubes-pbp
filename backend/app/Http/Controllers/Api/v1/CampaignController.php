@@ -18,6 +18,14 @@ class CampaignController extends Controller
     {
         $campaigns = Campaign::with(['comments', 'reports'])->latest()->get();
 
+        // Populate deterministic mock collected donation for UI demo if collected is 0
+        foreach ($campaigns as $campaign) {
+            if ($campaign->collected_donation == 0) {
+                $mockPercent = (($campaign->id * 17) % 40) + 15; // e.g. 32%, 19%, 36%...
+                $campaign->collected_donation = round(($campaign->target_donation * $mockPercent) / 100, 2);
+            }
+        }
+
         return response()->json([
             'status' => 'success',
             'data' => $campaigns
@@ -113,5 +121,36 @@ class CampaignController extends Controller
             'message' => 'Laporan alokasi dana berhasil ditambahkan',
             'data' => $report
         ], 201);
+    }
+
+    /**
+     * Donate / record donation in campaign.
+     */
+    public function donate(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'programId'    => 'required|integer|exists:campaigns,id',
+            'donateAmount' => 'required|numeric|min:0.000000000000000001',
+            'txHash'       => 'nullable|string',
+            'doa'          => 'nullable|string',
+        ]);
+
+        $campaign = Campaign::findOrFail($validated['programId']);
+        $campaign->collected_donation += $validated['donateAmount'];
+        $campaign->save();
+
+        if (!empty($validated['doa'])) {
+            CampaignComment::create([
+                'campaign_id' => $campaign->id,
+                'user_name' => $request->user()?->name ?? 'Anonim',
+                'comment' => $validated['doa'],
+            ]);
+        }
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Donasi berhasil disinkronisasi.',
+            'data' => $campaign->load(['comments', 'reports'])
+        ]);
     }
 }

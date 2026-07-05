@@ -26,6 +26,10 @@ const buildHeaders = (isMultipart = false) => {
   if (token) {
     headers['Authorization'] = `Bearer ${token}`;
   }
+  const wallet = localStorage.getItem('connected_wallet');
+  if (wallet) {
+    headers['X-Wallet-Address'] = wallet.toLowerCase();
+  }
   return headers;
 };
 

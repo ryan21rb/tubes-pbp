@@ -257,17 +257,18 @@ export default function LandingPage({ onLoginClick }) {
         }
       }
 
-      // === LANGKAH 3: Ekstrak & simpan Sanctum token ===
+      // === LANGKAH 3: Ekstrak & simpan JWT token ===
       const token = response?.access_token || response?.token || response?.data?.token;
       const role = response?.role || response?.user?.role || response?.data?.role || 'donatur';
       const instansiType = response?.instansi_type || response?.user?.instansi_type || null;
+      const user = response?.user || response?.data?.user || null;
 
       if (!token) {
         throw new Error('Server tidak mengembalikan token autentikasi. Pastikan backend berjalan.');
       }
 
-      // Simpan token, role, instansi_type ke localStorage & update context
-      if (setAuthToken) setAuthToken(token, role, instansiType);
+      // Simpan token, role, instansi_type, & user ke localStorage & update context
+      if (setAuthToken) setAuthToken(token, role, instansiType, user);
 
       // Hubungkan wallet ke context juga
       if (connectWallet) await connectWallet();

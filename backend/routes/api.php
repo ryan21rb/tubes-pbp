@@ -14,6 +14,7 @@ Route::prefix('v1')->group(function () {
     // Baca & buat kampanye (PUBLIC — Yayasan bisa publish tanpa token)
     Route::get('/campaigns',  [CampaignController::class, 'index']);
     Route::post('/campaigns', [CampaignController::class, 'store']);
+    Route::post('/donations', [CampaignController::class, 'donate']);
 
     // Baca semua pengajuan bantuan (PUBLIC — Instansi & Yayasan bisa akses)
     Route::get('/documents', [DocumentController::class, 'index']);
@@ -23,8 +24,8 @@ Route::prefix('v1')->group(function () {
     Route::post('/nodes/heartbeat', [\App\Http\Controllers\Api\v1\NodeController::class, 'heartbeat']);
     Route::get('/nodes/status', [\App\Http\Controllers\Api\v1\NodeController::class, 'status']);
 
-    // Endpoint Terproteksi Token Laravel Sanctum
-    Route::middleware('auth:sanctum')->group(function () {
+    // Endpoint Terproteksi Token JWT Custom
+    Route::middleware('auth.jwt')->group(function () {
         // Logout
         Route::post('/auth/logout', [AuthController::class, 'logout']);
 

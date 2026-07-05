@@ -28,13 +28,18 @@ export default function PenerimaPage({ onLogoutClick = () => {} }) {
   if (!context) {
     return <div className="min-h-screen flex items-center justify-center">Loading context...</div>;
   }
-  const { dataPengajuan, ajukanBantuan, dataProgram, dataDonatur, updateTahapBantuan, riwayatAktivitasGlobal, walletAddress, unreadNotifs, markNotifsRead, catatAktivitas } = context;
+  const { currentUser, dataPengajuan, ajukanBantuan, dataProgram, dataDonatur, updateTahapBantuan, riwayatAktivitasGlobal, walletAddress, unreadNotifs, markNotifsRead, catatAktivitas } = context;
   const [alertMsg, setAlertMsg] = useState(null);
 
   const [activeTab, setActiveTab] = useState("beranda");
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [showEditProfile, setShowEditProfile] = useState(false);
-  const [userProfile, setUserProfile] = useState({ name: "Ahmad Sudirman", email: "ahmad.s@email.com", nik: "3201234567890001", role: "Penerima" });
+  const [userProfile, setUserProfile] = useState(() => ({
+    name: currentUser?.name || "Ahmad Sudirman",
+    email: currentUser?.email || "ahmad.s@email.com",
+    nik: "3201234567890001",
+    role: currentUser?.role || "Penerima"
+  }));
   const [profileAvatar, setProfileAvatar] = useState(null);
   const [likedNotes, setLikedNotes] = useState([]);
 
@@ -46,9 +51,33 @@ export default function PenerimaPage({ onLogoutClick = () => {} }) {
   const [submitError, setSubmitError] = useState(null);
   
   // Cek apakah user sudah punya pengajuan
-  const myPengajuan = dataPengajuan.find(p => p.nik === userProfile.nik);
+  const myPengajuan = dataPengajuan.find(p => 
+    (p.walletAddress && p.walletAddress.toLowerCase() === walletAddress?.toLowerCase()) ||
+    (currentUser && p.user && p.user.email === currentUser.email)
+  ) || dataPengajuan[0];
   const myProgram = myPengajuan ? dataProgram.find(p => p.id === myPengajuan.programId) : null;
   const programTersedia = dataProgram.filter(p => p.kategori === formData.kategori && p.status === "Berjalan");
+
+  useEffect(() => {
+    if (currentUser) {
+      setUserProfile(prev => ({
+        ...prev,
+        name: currentUser.name || prev.name,
+        email: currentUser.email || prev.email,
+        role: currentUser.role || prev.role,
+      }));
+    }
+  }, [currentUser]);
+
+  useEffect(() => {
+    if (myPengajuan) {
+      setUserProfile(prev => ({
+        ...prev,
+        nik: myPengajuan.nik || prev.nik,
+        name: myPengajuan.nama || prev.name,
+      }));
+    }
+  }, [myPengajuan]);
 
   useEffect(() => {
     document.documentElement.classList.toggle("dark", isDarkMode);
@@ -106,14 +135,16 @@ export default function PenerimaPage({ onLogoutClick = () => {} }) {
 
   const getCurrentStepIndex = () => {
     if (!myPengajuan) return 1;
+    const t = myPengajuan.tahapBantuan;
+    
+    if (t === 'Registrasi & Upload Berkas') return 1;
+    if (t === 'Verifikasi Instansi') return 2;
+    if (t === 'Otentikasi Yayasan') return 3;
+    if (t === 'Cairkan Dana') return 4;
+    if (t === 'Selesai') return 5;
+    
+    // Fallback using status if tahapBantuan doesn't match standard stages
     const s = myPengajuan.status?.toLowerCase();
-    
-    // Pemetaan Status:
-    // SUBMITTED / menunggu -> Verifikasi Instansi (2)
-    // DISETUJUI -> Otentikasi Yayasan (3)
-    // ZKP_VALIDATED -> Cairkan Dana (4)
-    // FUND_DISTRIBUTED -> Selesai (5)
-    
     if (s === 'menunggu' || s === 'submitted') return 2;
     if (s === 'disetujui') return 3;
     if (s === 'zkp_validated') return 4;
