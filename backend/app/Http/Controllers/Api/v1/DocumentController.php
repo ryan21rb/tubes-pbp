@@ -167,13 +167,12 @@ class DocumentController extends Controller
 
         $walletLower = strtolower($validated['wallet_address']);
 
-        // Pastikan wallet yang mengirim vote terdaftar sebagai salah satu instansi validator
-        $allowedWallets = [
-            '0x5a584e7d505ac812e6b095f6f5885884d2615aab', // Dinsos
-            '0x6bbbf41d0decdc96bd44c14b953b31b9e9ae37bb', // Disdik
-            '0xab2bd36fa71777a23f87399212b782a96ee1256b', // BPBD
-            '0xfa411cb3f7fbf067ba20881662dd70c01ca4fe16', // Dinkes
-        ];
+        // Pastikan wallet yang mengirim vote terdaftar sebagai salah satu instansi validator di database
+        $allowedWallets = \App\Models\User::where('role', 'instansi')
+            ->whereNotNull('wallet_address')
+            ->pluck('wallet_address')
+            ->map(fn($w) => strtolower($w))
+            ->toArray();
 
         if (!in_array($walletLower, $allowedWallets)) {
             return response()->json([
