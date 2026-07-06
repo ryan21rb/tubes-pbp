@@ -876,7 +876,16 @@ export default function ValidatorDashboard({ onLogoutClick = () => {} }) {
                   </div>
                   <div className="grid grid-cols-4 gap-3 text-xs font-bold text-center">
                     {["Dinsos", "Disdik", "BPBD", "Dinkes"].map((nodeKey) => {
-                      const nodeAddress = NODE_IDENTITIES[nodeKey]?.address?.toLowerCase();
+                      const keyLower = nodeKey.toLowerCase();
+                      const matchedNode = (nodeStatuses || []).find(n => {
+                        const nameLower = n.name.toLowerCase();
+                        if (keyLower === 'dinsos') return nameLower.includes('sosial');
+                        if (keyLower === 'disdik') return nameLower.includes('pendidikan');
+                        if (keyLower === 'bpbd') return nameLower.includes('bpbd');
+                        if (keyLower === 'dinkes') return nameLower.includes('kesehatan');
+                        return false;
+                      });
+                      const nodeAddress = matchedNode ? matchedNode.wallet_address.toLowerCase() : NODE_IDENTITIES[nodeKey]?.address?.toLowerCase();
                       const approvalRecord = (selectedPengajuan.approvals || []).find(a => a.wallet_address === nodeAddress);
                       const isSigned = approvalRecord?.status === 'approved' || selectedPengajuan.signedNodes?.includes(nodeKey);
                       const isRejected = approvalRecord?.status === 'rejected' || selectedPengajuan.rejectedNodes?.includes(nodeKey);
