@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\v1;
 use App\Http\Controllers\Controller;
 use App\Models\User;
 use App\Enums\UserRole;
+use App\Enums\InstansiType;
 use Illuminate\Validation\Rules\Enum;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -23,7 +24,7 @@ class AuthController extends Controller
             'email'         => 'required|string|email|max:255|unique:users',
             'password'      => 'required|string|min:8',
             'role'          => ['nullable', 'string', new Enum(UserRole::class)],
-            'instansi_type' => 'nullable|string|in:dinsos,diknas,disdik,bpbd,dinkes',
+            'instansi_type' => ['nullable', 'string', new Enum(InstansiType::class)],
             'wallet_address'=> 'nullable|string',
         ]);
 
