@@ -1143,17 +1143,51 @@ export default function LandingPage({ onLoginClick }) {
               )}
               
               {authMode === 'register' && (
-                <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-gray-500 dark:text-gray-400">Nama Lengkap</label>
-                  <input 
-                    type="text" 
-                    required
-                    value={authForm.name}
-                    onChange={(e) => setAuthForm({...authForm, name: e.target.value})}
-                    className="w-full p-3 rounded-xl border border-gray-200 dark:border-slate-700 dark:bg-slate-800 dark:text-white text-sm outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 transition-all" 
-                    placeholder="Masukkan nama lengkap" 
-                  />
-                </div>
+                <>
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold text-gray-500 dark:text-gray-400">Nama Lengkap</label>
+                    <input 
+                      type="text" 
+                      required
+                      value={authForm.name}
+                      onChange={(e) => setAuthForm({...authForm, name: e.target.value})}
+                      className="w-full p-3 rounded-xl border border-gray-200 dark:border-slate-700 dark:bg-slate-800 dark:text-white text-sm outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 transition-all" 
+                      placeholder="Masukkan nama lengkap" 
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold text-gray-500 dark:text-gray-400">Pilih Peran (Role)</label>
+                    <select
+                      value={authForm.role}
+                      onChange={(e) => setAuthForm({...authForm, role: e.target.value, instansi_type: ''})}
+                      className="w-full p-3 rounded-xl border border-gray-200 dark:border-slate-700 dark:bg-slate-800 dark:text-white text-sm outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 transition-all"
+                    >
+                      <option value="donatur">Donatur</option>
+                      <option value="yayasan">Yayasan</option>
+                      <option value="penerima">Penerima Bantuan</option>
+                      <option value="instansi">Instansi Validator</option>
+                    </select>
+                  </div>
+
+                  {authForm.role === 'instansi' && (
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-bold text-gray-500 dark:text-gray-400">Tipe Instansi</label>
+                      <select
+                        value={authForm.instansi_type}
+                        onChange={(e) => setAuthForm({...authForm, instansi_type: e.target.value})}
+                        className="w-full p-3 rounded-xl border border-gray-200 dark:border-slate-700 dark:bg-slate-800 dark:text-white text-sm outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 transition-all"
+                        required
+                      >
+                        <option value="">-- Pilih Tipe Instansi --</option>
+                        <option value="dinsos">Dinas Sosial (Dinsos)</option>
+                        <option value="diknas">Dinas Pendidikan (Diknas)</option>
+                        <option value="bpbd">BPBD</option>
+                        <option value="dinkes">Dinas Kesehatan (Dinkes)</option>
+                      </select>
+                    </div>
+                  )}
+                </>
               )}
 
               <div className="space-y-1.5">
