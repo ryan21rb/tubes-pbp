@@ -313,6 +313,7 @@ export default function LandingPage({ onLoginClick }) {
         const payload = {
           email: authForm.email,
           password: authForm.password,
+          wallet_address: address,
         };
         response = await apiLogin(payload);
         

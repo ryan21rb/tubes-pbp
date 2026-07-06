@@ -352,7 +352,16 @@ const AktivitasView = ({ activities }) => {
                   <p className="text-gray-900 dark:text-slate-100 font-medium leading-relaxed">{act.text}</p>
                   <div className="flex items-center gap-4 mt-2">
                     <span className="text-xs text-gray-400 dark:text-slate-500 font-semibold">{act.date}</span>
-                    {act.IDTrx && <span className="text-xs text-emerald-600 dark:text-emerald-400 font-mono bg-emerald-50 dark:bg-emerald-900/30 px-2 py-0.5 rounded flex items-center gap-1"><Shield size={10} /> ID Trx: {act.IDTrx}</span>}
+                    {act.IDTrx && (
+                      <a
+                        href={`#/tx/${act.IDTrx}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-xs text-emerald-600 dark:text-emerald-400 font-mono bg-emerald-50 dark:bg-emerald-900/30 px-2 py-0.5 rounded flex items-center gap-1 hover:bg-emerald-100 dark:hover:bg-emerald-800/40 transition-colors"
+                      >
+                        <Shield size={10} /> ID Trx: {act.IDTrx.substring(0, 6)}...{act.IDTrx.substring(act.IDTrx.length - 5)}
+                      </a>
+                    )}
                   </div>
                 </div>
               </div>
@@ -467,7 +476,7 @@ const ProfilView = ({ userProfile, onEditProfile, bookmarkedCampaigns, myDonated
   );
 };
 
-const DetailCampaignView = ({ camp, onBack, onDonateSuccess }) => {
+const DetailCampaignView = ({ camp, onBack, onAddActivity, userBalance }) => {
   const [activeTab, setActiveTab] = useState('about');
   const [modalState, setModalState] = useState(null); // 'donate' | 'success' | null
   const [alertMsg, setAlertMsg] = useState(null);
@@ -809,7 +818,7 @@ const DonaturPage = ({ onLogoutClick = () => {} }) => {
     id: p.id,
     title: p.judul || p.title || '',
     tag: p.kategori || p.tag || 'Ekonomi',
-    percent: Math.min(((p.terkumpul || 0) / (p.targetDonasi || 1)) * 100, 100),
+    percent: Math.round(Math.min(((p.terkumpul || 0) / (p.targetDonasi || 1)) * 100, 100)),
     verified: p.isVerified !== false,
     target: p.targetDonasi || 0,
     collected: p.terkumpul || 0,
@@ -875,12 +884,69 @@ const DonaturPage = ({ onLogoutClick = () => {} }) => {
     }
   }, [currentUser]);
 
-  const [userPrayers, setUserPrayers] = useState([
-    { text: "Sedikit rezeki semoga bisa membantu beban saudara kita di sana.", campaign: "Pembangunan Hunian Sementara Cianjur" }
-  ]);
-  const [myActivities, setMyActivities] = useState([
-    { id: 1, type: 'donasi', text: 'Anda baru saja berdonasi pada program Pembangunan Hunian Sementara Cianjur sebesar 0.01 ETH', date: '15 Jun 2026', IDTrx: '0xabc123...456' },
-  ]);
+  const [userPrayers, setUserPrayers] = useState([]);
+  const [myActivities, setMyActivities] = useState([]);
+
+  useEffect(() => {
+    if (!currentUser) return;
+
+    // 1. Get all donations/prayers from dataDonatur where name matches or userId matches
+    const myDonations = (dataDonatur || [])
+      .filter(d => d.userId === currentUser.id || d.nama === currentUser.name || d.nama === 'Anonim')
+      .map(d => {
+        // Find campaign title for this donation
+        const campaignObj = (dataProgram || []).find(p => p.id === d.programId);
+        const campaignTitle = campaignObj ? (campaignObj.judul || campaignObj.title) : 'Program Bantuan';
+        
+        return {
+          id: d.id,
+          type: d.nominal > 0 ? 'donasi' : 'doa',
+          text: d.nominal > 0 
+            ? `Anda baru saja berdonasi pada program ${campaignTitle} sebesar ${d.nominal} ETH`
+            : `Anda mengirimkan doa: "${d.doa}" pada program ${campaignTitle}`,
+          date: d.waktu && d.waktu !== 'Baru saja' && !isNaN(Date.parse(d.waktu))
+            ? new Date(d.waktu).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })
+            : 'Baru saja',
+          IDTrx: d.txHash || null
+        };
+      });
+
+    // 2. Get all document submissions from dataPengajuan
+    const mySubmissions = (dataPengajuan || [])
+      .filter(p => (p.walletAddress && walletAddress && p.walletAddress.toLowerCase() === walletAddress.toLowerCase()) || p.nama === currentUser.name)
+      .map(p => ({
+        id: p.id,
+        type: 'pengajuan',
+        text: `Anda telah mengajukan bantuan kategori ${p.kategori}. CID: [Rahasia] (ZKP Terverifikasi)`,
+        date: p.tanggalSistem || 'Baru saja',
+        IDTrx: null
+      }));
+
+    // 3. Combine both and sort by id desc
+    const combined = [...myDonations, ...mySubmissions].sort((a, b) => b.id - a.id);
+    
+    setMyActivities(combined);
+
+    // 4. Update userPrayers
+    const myPrayers = myDonations
+      .filter(d => d.type === 'doa' || d.type === 'donasi')
+      .map(d => {
+        let text = d.text;
+        if (d.text.includes('doa: "')) {
+          text = d.text.replace(/Anda mengirimkan doa: "|".*/g, '');
+        } else {
+          text = d.text;
+        }
+        const commentObj = (dataDonatur || []).find(cmt => cmt.id === d.id);
+        const campaignObj = (dataProgram || []).find(p => p.id === (commentObj ? commentObj.programId : null));
+        const campaignTitle = campaignObj ? (campaignObj.judul || campaignObj.title) : 'Program Bantuan';
+        return {
+          text: commentObj && commentObj.doa ? commentObj.doa : text,
+          campaign: campaignTitle
+        };
+      });
+    setUserPrayers(myPrayers);
+  }, [dataDonatur, dataProgram, dataPengajuan, currentUser, walletAddress]);
 
   const [selectedCampaignDetail, setSelectedCampaignDetail] = useState(null);
 
@@ -889,6 +955,9 @@ const DonaturPage = ({ onLogoutClick = () => {} }) => {
   };
 
   const handleAddActivity = (act, isPrayer = false) => {
+    if (fetchCampaigns) {
+      fetchCampaigns();
+    }
     setMyActivities(prev => [act, ...prev]);
     if (isPrayer && selectedCampaignDetail) {
       setUserPrayers(prev => [{ text: act.text.replace(/Anda mengirimkan doa: "|".*/g, ''), campaign: selectedCampaignDetail.title }, ...prev]);
@@ -967,7 +1036,7 @@ const DonaturPage = ({ onLogoutClick = () => {} }) => {
   ];
 
   if (selectedCampaignDetail) {
-    return <DetailCampaignView camp={selectedCampaignDetail} userBalance={1.24} onBack={() => setSelectedCampaignDetail(null)} onAddActivity={handleAddActivity} />;
+    return <DetailCampaignView camp={selectedCampaignDetail} userBalance={walletBalance} onBack={() => setSelectedCampaignDetail(null)} onAddActivity={handleAddActivity} />;
   }
 
   return (

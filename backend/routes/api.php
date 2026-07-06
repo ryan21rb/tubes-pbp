@@ -15,7 +15,6 @@ Route::prefix('v1')->group(function () {
     // Baca & buat kampanye (PUBLIC — Yayasan bisa publish tanpa token)
     Route::get('/campaigns',  [CampaignController::class, 'index']);
     Route::post('/campaigns', [CampaignController::class, 'store']);
-    Route::post('/donations', [CampaignController::class, 'donate']);
 
     // Baca semua pengajuan bantuan (PUBLIC — Instansi & Yayasan bisa akses)
     Route::get('/documents', [DocumentController::class, 'index']);
@@ -29,6 +28,9 @@ Route::prefix('v1')->group(function () {
     Route::middleware('auth.jwt')->group(function () {
         // Logout
         Route::post('/auth/logout', [AuthController::class, 'logout']);
+
+        // Record donation under authenticated session
+        Route::post('/donations', [CampaignController::class, 'donate']);
 
         // Upload berkas persyaratan korban & pinning IPFS
         Route::post('/document/upload', [DocumentController::class, 'upload']);

@@ -4,6 +4,7 @@ import ValidatorDashboard from './pages/instansi';
 import YayasanPage from './pages/yayasan';
 import PenerimaPage from './pages/penerima';
 import DonaturPage from './pages/donatur';
+import TransactionExplorerPage from './pages/transaction_explorer';
 import { PhilanthropyContext, PhilanthropyProvider } from './context/PhilanthropyContext';
 
 function AppRouter() {
@@ -30,6 +31,12 @@ function AppRouter() {
   // Guard routing based on authentication token and user role
   useEffect(() => {
     const isLandingOrLogin = currentHash === '#/' || currentHash === '#/login' || currentHash === '#/register';
+    const isExplorerRoute = currentHash.startsWith('#/tx/');
+
+    if (isExplorerRoute) {
+      // Allow transaction explorer routes to render without redirection
+      return;
+    }
 
     if (apiToken) {
       // User is logged in
@@ -64,6 +71,10 @@ function AppRouter() {
   }, [currentHash, apiToken, userRole]);
 
   const renderPage = () => {
+    if (currentHash.startsWith('#/tx/')) {
+      return <TransactionExplorerPage />;
+    }
+
     switch (currentHash) {
       case '#/donatur':
         return <DonaturPage onLogoutClick={handleLogoutClick} />;

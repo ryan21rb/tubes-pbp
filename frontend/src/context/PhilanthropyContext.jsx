@@ -92,11 +92,13 @@ export const PhilanthropyProvider = ({ children }) => {
         komentar: (c.comments || []).map(cm => ({
           id: cm.id,
           nama: cm.user_name || cm.name || 'Anonim',
-          doa: cm.content || cm.text || '',
+          doa: cm.comment || cm.content || cm.text || '',
           nominal: parseFloat(cm.amount || 0),
           waktu: cm.created_at || 'Baru saja',
           aamiin: cm.aamiin_count || cm.aamiin || 0,
           programId: c.id,
+          txHash: cm.tx_hash || null,
+          userId: cm.user_id || null,
         })),
       }));
 
@@ -493,7 +495,7 @@ export const PhilanthropyProvider = ({ children }) => {
       setDataPengajuan(prev => [newPengajuan, ...prev]);
       catatAktivitas(
         `Pengajuan Baru: ${newPengajuan.id}`,
-        `Bantuan diajukan oleh ${newPengajuan.nama} kategori ${newPengajuan.kategori}. CID: ${cid.substring(0, 12)}...`,
+        `Bantuan diajukan oleh ${newPengajuan.nama} kategori ${newPengajuan.kategori}. CID: [Rahasia] (ZKP Terverifikasi)`,
         'Penerima'
       );
 

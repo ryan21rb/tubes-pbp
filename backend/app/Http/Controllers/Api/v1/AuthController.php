@@ -55,8 +55,9 @@ class AuthController extends Controller
     public function login(Request $request): JsonResponse
     {
         $validated = $request->validate([
-            'email'    => 'required|string|email',
-            'password' => 'required|string',
+            'email'          => 'required|string|email',
+            'password'       => 'required|string',
+            'wallet_address' => 'nullable|string',
         ]);
 
         $user = User::where('email', $validated['email'])->first();
@@ -66,6 +67,11 @@ class AuthController extends Controller
                 'status'  => 'error',
                 'message' => 'Email atau password salah.',
             ], 401);
+        }
+
+        if (!empty($validated['wallet_address'])) {
+            $user->wallet_address = $validated['wallet_address'];
+            $user->save();
         }
 
         $token = JwtService::generateToken($user);

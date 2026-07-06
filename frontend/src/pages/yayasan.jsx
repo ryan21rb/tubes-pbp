@@ -866,9 +866,9 @@ const FundsView = ({ distributions, onAction }) => (
                   <p className="text-[10px] font-bold text-amber-600 dark:text-amber-400 flex items-center gap-1 mt-0.5"><CheckCircle size={10} /> 5%</p>
                 </td>
                 <td className="py-5 px-6">
-                  <button onClick={() => onAction(`Membuka explorer untuk ${d.txHash}`)} className="text-xs font-mono text-gray-500 dark:text-slate-400 flex items-center gap-1 hover:text-emerald-600 dark:hover:text-emerald-400">
-                    {d.txHash} <ExternalLink size={12} />
-                  </button>
+                  <a href={`#/tx/${d.txHash}`} target="_blank" rel="noopener noreferrer" className="text-xs font-mono text-gray-500 dark:text-slate-400 flex items-center gap-1 hover:text-emerald-600 dark:hover:text-emerald-400">
+                    {d.txHash.substring(0, 6)}...{d.txHash.substring(d.txHash.length - 5)} <ExternalLink size={12} />
+                  </a>
                 </td>
                 <td className="py-5 px-6 text-center">
                   <span className="text-[9px] bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 font-extrabold px-3 py-1.5 rounded uppercase inline-flex items-center gap-1.5">

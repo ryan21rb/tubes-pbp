@@ -139,13 +139,14 @@ class CampaignController extends Controller
         $campaign->collected_donation += $validated['donateAmount'];
         $campaign->save();
 
-        if (!empty($validated['doa'])) {
-            CampaignComment::create([
-                'campaign_id' => $campaign->id,
-                'user_name' => $request->user()?->name ?? 'Anonim',
-                'comment' => $validated['doa'],
-            ]);
-        }
+        CampaignComment::create([
+            'campaign_id' => $campaign->id,
+            'user_id'     => $request->user()?->id,
+            'user_name'   => $request->user()?->name ?? 'Anonim',
+            'comment'     => !empty($validated['doa']) ? $validated['doa'] : 'Berdonasi untuk program ini.',
+            'amount'      => $validated['donateAmount'],
+            'tx_hash'     => $validated['txHash'] ?? null,
+        ]);
 
         return response()->json([
             'status' => 'success',
