@@ -12,6 +12,9 @@ function AppRouter() {
   const { apiToken, userRole, logout } = useContext(PhilanthropyContext);
 
   useEffect(() => {
+    // Reset to landing page on initial load/refresh
+    window.location.hash = '#/';
+
     const handleHashChange = () => {
       setCurrentHash(window.location.hash || '#/');
     };
@@ -30,7 +33,8 @@ function AppRouter() {
 
   // Guard routing based on authentication token and user role
   useEffect(() => {
-    const isLandingOrLogin = currentHash === '#/' || currentHash === '#/login' || currentHash === '#/register';
+    const isLanding = currentHash === '#/' || currentHash === '' || currentHash === '#';
+    const isLoginOrRegister = currentHash === '#/login' || currentHash === '#/register';
     const isExplorerRoute = currentHash.startsWith('#/tx/');
 
     if (isExplorerRoute) {
@@ -51,20 +55,16 @@ function AppRouter() {
       } else if (roleLower === 'penerima') {
         expectedHash = '#/penerima';
       } else if (roleLower === 'donatur') {
-        if (currentHash === '#/penerima') {
-          expectedHash = '#/penerima';
-        } else {
-          expectedHash = '#/donatur';
-        }
+        expectedHash = '#/donatur';
       }
 
-      // Redirect if current page does not match expected role page
-      if (isLandingOrLogin || currentHash !== expectedHash) {
+      // Redirect if user tries to visit login/register, or if they are on a protected page that is not their dashboard
+      if (isLoginOrRegister || (!isLanding && currentHash !== expectedHash)) {
         window.location.hash = expectedHash;
       }
     } else {
       // User is not logged in, block protected pages
-      if (!isLandingOrLogin) {
+      if (!isLanding && !isLoginOrRegister) {
         window.location.hash = '#/';
       }
     }

@@ -16,10 +16,6 @@ Route::prefix('v1')->group(function () {
     Route::get('/campaigns',  [CampaignController::class, 'index']);
     Route::post('/campaigns', [CampaignController::class, 'store']);
 
-    // Baca semua pengajuan bantuan (PUBLIC — Instansi & Yayasan bisa akses)
-    Route::get('/documents', [DocumentController::class, 'index']);
-    Route::post('/documents/{id}/vote', [DocumentController::class, 'vote']);
-
     // Node API Polling
     Route::post('/nodes/heartbeat', [\App\Http\Controllers\Api\v1\NodeController::class, 'heartbeat']);
     Route::get('/nodes/status', [\App\Http\Controllers\Api\v1\NodeController::class, 'status']);
@@ -31,6 +27,10 @@ Route::prefix('v1')->group(function () {
 
         // Record donation under authenticated session
         Route::post('/donations', [CampaignController::class, 'donate']);
+
+        // Baca semua pengajuan bantuan & vote (Terproteksi Token JWT)
+        Route::get('/documents', [DocumentController::class, 'index']);
+        Route::post('/documents/{id}/vote', [DocumentController::class, 'vote']);
 
         // Upload berkas persyaratan korban & pinning IPFS
         Route::post('/document/upload', [DocumentController::class, 'upload']);

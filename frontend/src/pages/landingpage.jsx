@@ -97,6 +97,8 @@ export default function LandingPage({ onLoginClick }) {
   const setAuthToken = context?.setAuthToken;
   const VIP_NODES = context?.VIP_NODES || [];
   const setWalletAddress = context?.setWalletAddress;
+  const apiToken = context?.apiToken;
+  const userRole = context?.userRole;
 
   const [liveStats, setLiveStats] = useState({
     total_collected_eth: 127.5,
@@ -427,28 +429,43 @@ export default function LandingPage({ onLoginClick }) {
               </div>
             </button>
 
-            {/* TOMBOL HUBUNGKAN WALLET */}
-            <button
-              onClick={handleConnectWallet}
-              disabled={isConnecting}
-              className={`px-6 py-2 rounded-full font-bold text-sm tracking-wide transition-all duration-300 flex items-center justify-center gap-2
-                bg-emerald-600 text-white border border-transparent
-                hover:bg-emerald-500 active:scale-95 disabled:opacity-90 disabled:cursor-wait
-                ${isWalletBlinking ? "animate-pulse shadow-[0_0_20px_rgba(255,255,255,0.7)] scale-105" : "shadow-[0_0_10px_rgba(255,255,255,0.15)] dark:shadow-[0_0_15px_rgba(255,255,255,0.05)]"}
-                ${isConnecting ? "shadow-[0_0_20px_rgba(52,211,153,0.5)] scale-105" : ""}`}
-            >
-              {isConnecting ? (
-                <>
-                  <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                  </svg>
-                  Menunggu Konfirmasi...
-                </>
-              ) : (
-                "HUBUNGKAN WALLET"
-              )}
-            </button>
+            {/* TOMBOL HUBUNGKAN WALLET / MASUK DASHBOARD */}
+            {apiToken ? (
+              <button
+                onClick={() => {
+                  const roleLower = (userRole || '').toLowerCase();
+                  if (roleLower === 'yayasan') window.location.hash = '#/yayasan';
+                  else if (roleLower === 'instansi') window.location.hash = '#/instansi';
+                  else if (roleLower === 'penerima') window.location.hash = '#/penerima';
+                  else window.location.hash = '#/donatur';
+                }}
+                className="px-6 py-2 rounded-full font-bold text-sm tracking-wide transition-all duration-300 flex items-center justify-center gap-2 bg-emerald-600 text-white border border-transparent hover:bg-emerald-500 active:scale-95 shadow-[0_0_10px_rgba(255,255,255,0.15)] hover:shadow-[0_0_15px_rgba(16,185,129,0.3)]"
+              >
+                MASUK DASHBOARD
+              </button>
+            ) : (
+              <button
+                onClick={handleConnectWallet}
+                disabled={isConnecting}
+                className={`px-6 py-2 rounded-full font-bold text-sm tracking-wide transition-all duration-300 flex items-center justify-center gap-2
+                  bg-emerald-600 text-white border border-transparent
+                  hover:bg-emerald-500 active:scale-95 disabled:opacity-90 disabled:cursor-wait
+                  ${isWalletBlinking ? "animate-pulse shadow-[0_0_20px_rgba(255,255,255,0.7)] scale-105" : "shadow-[0_0_10px_rgba(255,255,255,0.15)] dark:shadow-[0_0_15px_rgba(255,255,255,0.05)]"}
+                  ${isConnecting ? "shadow-[0_0_20px_rgba(52,211,153,0.5)] scale-105" : ""}`}
+              >
+                {isConnecting ? (
+                  <>
+                    <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    Menunggu Konfirmasi...
+                  </>
+                ) : (
+                  "HUBUNGKAN WALLET"
+                )}
+              </button>
+            )}
           </div>
 
           {/* Mobile Menu Button */}

@@ -264,7 +264,7 @@ export const PhilanthropyProvider = ({ children }) => {
             if (isVip) {
               const newRole = address === '0x507610fdf65637c1752657664dfea2865e589b88' ? 'yayasan' : 'instansi';
               const storedToken = localStorage.getItem('auth_token');
-              if (storedToken !== 'vip_bypass') {
+              if (!storedToken) {
                 setAuthToken('vip_bypass', newRole);
                 window.location.hash = newRole === 'yayasan' ? '#/yayasan' : '#/instansi';
               }
