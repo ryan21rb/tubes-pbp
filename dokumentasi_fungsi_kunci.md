@@ -23,6 +23,17 @@ Kontrak pintar bertindak sebagai *state machine* terdesentralisasi yang menguji 
 
 ---
 
+### **🛠️ 5. Perancangan Smart Contract**
+*   **• State Variables (Data Permanen di Ledger)**:
+    *   **`admin`** (`address`): Menyimpan alamat pemilik kontrak (admin) yang berhak mengubah konfigurasi verifikator.
+    *   **`zkVerifierAddress`** (`address`): Menyimpan alamat smart contract verifikator bukti ZKP aktif yang berjalan di blockchain.
+*   **• Functions (Daftar Fungsi Utama)**:
+    *   **`constructor(address _zkVerifierAddress)`**: Inisialisasi awal hak admin dan alamat verifikator ZKP.
+    *   **`updateVerifier(address _newVerifier)`**: Memperbarui/mengalihkan alamat modul verifikator ZKP.
+    *   **`verifyPovertyStatus(uint256[2] a, uint256[2][2] b, uint256[2] c, uint256[1] input)`**: Memvalidasi bukti ZK-SNARK secara on-chain dan memancarkan event kelayakan status.
+
+---
+
 ## 🖥️ 2. Backend API (Off-Chain / Laravel 13)
 
 Laravel bertindak sebagai jembatan off-chain untuk mengelola autentikasi pengguna, penyimpanan data non-blockchain, serta interaksi file dengan IPFS.
