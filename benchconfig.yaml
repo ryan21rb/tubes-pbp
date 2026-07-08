@@ -1,0 +1,15 @@
+test:
+  name: philanthropy-chain-benchmark
+  description: Stress test untuk sistem PhilanthropyChain
+  workers:
+    type: local
+    number: 4
+  rounds:
+    - label: Kirim Donasi Massal
+      txNumber: 1000       # Target 1.000 transaksi sesuai Bab 1 abang
+      rateControl:
+        type: fixed-rate
+        opts:
+          tps: 50          # Mengirim 50 transaksi per detik (TPS)
+      workload:
+        module: benchmarks/scenario/donate.js

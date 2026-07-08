@@ -16,7 +16,15 @@ class CampaignController extends Controller
      */
     public function index(Request $request): JsonResponse
     {
-        $campaigns = Campaign::with(['comments', 'reports'])->latest()->get();
+        $category = $request->query('category');
+        if ($category) {
+            $campaigns = Campaign::with(['comments', 'reports'])
+                ->where('category', $category)
+                ->latest()
+                ->get();
+        } else {
+            $campaigns = Campaign::with(['comments', 'reports'])->latest()->get();
+        }
 
         // Populate deterministic mock collected donation for UI demo if collected is 0
         foreach ($campaigns as $campaign) {

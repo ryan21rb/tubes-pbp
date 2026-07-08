@@ -1,0 +1,128 @@
+{
+  "caliper": {
+    "blockchain": "ethereum"
+  },
+  "ethereum": {
+    "url": "ws://127.0.0.1:8545",
+    "contractDeployerAddress": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+    "contractDeployerAddressPrivateKey": "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80",
+    "fromAddress": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266,0x70997970C51812dc3A010C7d01b50e0d17dc79C8,0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC,0x90F79bf6EB2c4f870365E785982E1f101E93b906",
+    "fromAddressPrivateKey": "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80,0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d,0x5de4111afa1a4b93908f1ec5a40a2413e68521475c3d4eeed74d2aa4b67a7830,0x7c852118294e51e653712a81e04740d31622942451c92ca2f1ee4d444e27afa3",
+    "contracts": {
+      "PovertyCheck": {
+        "address": "0x8b1B398b9c49AFE6394aaE438f6F2E8039120253",
+        "path": "PovertyCheck.sol/PovertyCheck.json",
+        "abi": [
+          {
+            "inputs": [
+              {
+                "internalType": "address",
+                "name": "_zkVerifierAddress",
+                "type": "address"
+              }
+            ],
+            "stateMutability": "nonpayable",
+            "type": "constructor"
+          },
+          {
+            "anonymous": false,
+            "inputs": [
+              {
+                "indexed": true,
+                "internalType": "address",
+                "name": "user",
+                "type": "address"
+              },
+              {
+                "indexed": true,
+                "internalType": "bool",
+                "name": "isValid",
+                "type": "bool"
+              }
+            ],
+            "name": "StatusVerified",
+            "type": "event"
+          },
+          {
+            "inputs": [],
+            "name": "admin",
+            "outputs": [
+              {
+                "internalType": "address",
+                "name": "",
+                "type": "address"
+              }
+            ],
+            "stateMutability": "view",
+            "type": "function"
+          },
+          {
+            "inputs": [
+              {
+                "internalType": "address",
+                "name": "_newVerifier",
+                "type": "address"
+              }
+            ],
+            "name": "updateVerifier",
+            "outputs": [],
+            "stateMutability": "nonpayable",
+            "type": "function"
+          },
+          {
+            "inputs": [
+              {
+                "internalType": "uint256[2]",
+                "name": "a",
+                "type": "uint256[2]"
+              },
+              {
+                "internalType": "uint256[2][2]",
+                "name": "b",
+                "type": "uint256[2][2]"
+              },
+              {
+                "internalType": "uint256[2]",
+                "name": "c",
+                "type": "uint256[2]"
+              },
+              {
+                "internalType": "uint256[1]",
+                "name": "input",
+                "type": "uint256[1]"
+              }
+            ],
+            "name": "verifyPovertyStatus",
+            "outputs": [
+              {
+                "internalType": "bool",
+                "name": "",
+                "type": "bool"
+              }
+            ],
+            "stateMutability": "nonpayable",
+            "type": "function"
+          },
+          {
+            "inputs": [],
+            "name": "zkVerifierAddress",
+            "outputs": [
+              {
+                "internalType": "address",
+                "name": "",
+                "type": "address"
+              }
+            ],
+            "stateMutability": "view",
+            "type": "function"
+          }
+        ],
+        "estimateGas": true,
+        "gas": {
+          "updateVerifier": 200000,
+          "verifyPovertyStatus": 300000
+        }
+      }
+    }
+  }
+}

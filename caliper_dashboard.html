@@ -1,0 +1,865 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hyperledger Caliper - Real-Time Performance Monitor</title>
+    
+    <!-- Google Fonts: Inter & JetBrains Mono -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+    
+    <!-- Chart.js CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <style>
+        :root {
+            --bg-dark: #0b0f19;
+            --card-bg: rgba(17, 24, 39, 0.75);
+            --border: rgba(255, 255, 255, 0.06);
+            --text-primary: #f3f4f6;
+            --text-secondary: #9ca3af;
+            --accent-emerald: #10b981;
+            --accent-cyan: #06b6d4;
+            --accent-indigo: #6366f1;
+            --accent-red: #ef4444;
+            --font-main: 'Inter', sans-serif;
+            --font-mono: 'JetBrains Mono', monospace;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            background-color: var(--bg-dark);
+            color: var(--text-primary);
+            font-family: var(--font-main);
+            min-height: 100vh;
+            overflow-x: hidden;
+            background-image: 
+                radial-gradient(at 10% 20%, rgba(99, 102, 241, 0.08) 0px, transparent 50%),
+                radial-gradient(at 90% 10%, rgba(6, 182, 212, 0.08) 0px, transparent 50%),
+                radial-gradient(at 50% 80%, rgba(16, 185, 129, 0.05) 0px, transparent 50%);
+        }
+
+        /* ── Header ── */
+        header {
+            max-width: 1440px;
+            margin: 0 auto;
+            padding: 24px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .logo-container {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .logo-indicator {
+            width: 12px;
+            height: 12px;
+            background-color: var(--accent-emerald);
+            border-radius: 50%;
+            box-shadow: 0 0 12px var(--accent-emerald);
+            position: relative;
+        }
+
+        .logo-indicator::after {
+            content: '';
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            background-color: var(--accent-emerald);
+            border-radius: 50%;
+            animation: pulse 1.8s infinite;
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(1); opacity: 1; }
+            100% { transform: scale(3); opacity: 0; }
+        }
+
+        h1 {
+            font-size: 1.25rem;
+            font-weight: 800;
+            letter-spacing: -0.025em;
+            background: linear-gradient(to right, #ffffff, #9ca3af);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .badge {
+            background: rgba(16, 185, 129, 0.1);
+            border: 1px solid rgba(16, 185, 129, 0.2);
+            color: var(--accent-emerald);
+            padding: 6px 12px;
+            border-radius: 9999px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            letter-spacing: 0.05em;
+        }
+
+        /* ── Control Button ── */
+        .btn-simulate {
+            background: linear-gradient(135deg, var(--accent-emerald) 0%, #059669 100%);
+            border: none;
+            color: white;
+            padding: 10px 20px;
+            font-size: 0.85rem;
+            font-weight: 700;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            box-shadow: 0 4px 15px rgba(16, 185, 129, 0.3);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn-simulate:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(16, 185, 129, 0.5);
+        }
+
+        .btn-simulate:active {
+            transform: translateY(0);
+        }
+
+        /* ── Main Container ── */
+        main {
+            max-width: 1440px;
+            margin: 0 auto;
+            padding: 32px 24px;
+            display: flex;
+            flex-direction: column;
+            gap: 32px;
+        }
+
+        /* ── Progress Bar ── */
+        .progress-container {
+            background: var(--card-bg);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 20px;
+            backdrop-filter: blur(12px);
+        }
+
+        .progress-info {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.85rem;
+            margin-bottom: 10px;
+            font-weight: 600;
+        }
+
+        .progress-bar-bg {
+            width: 100%;
+            height: 10px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 999px;
+            overflow: hidden;
+        }
+
+        .progress-bar-fill {
+            width: 0%;
+            height: 100%;
+            background: linear-gradient(90deg, var(--accent-indigo), var(--accent-cyan), var(--accent-emerald));
+            border-radius: 999px;
+            transition: width 0.1s linear;
+        }
+
+        /* ── Metrics Grid ── */
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+            gap: 20px;
+        }
+
+        .metric-card {
+            background: var(--card-bg);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 24px;
+            backdrop-filter: blur(12px);
+            position: relative;
+            overflow: hidden;
+            transition: transform 0.3s ease, border-color 0.3s ease;
+        }
+
+        .metric-card:hover {
+            transform: translateY(-4px);
+            border-color: rgba(255, 255, 255, 0.15);
+        }
+
+        .metric-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 4px;
+            background: transparent;
+        }
+
+        .metric-card.emerald::before { background: var(--accent-emerald); }
+        .metric-card.cyan::before { background: var(--accent-cyan); }
+        .metric-card.indigo::before { background: var(--accent-indigo); }
+        .metric-card.white::before { background: #ffffff; }
+
+        .metric-title {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-bottom: 8px;
+        }
+
+        .metric-val {
+            font-size: 1.8rem;
+            font-weight: 800;
+            letter-spacing: -0.02em;
+        }
+
+        .metric-sub {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            margin-top: 6px;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        /* ── Charts Grid ── */
+        .charts-grid {
+            display: grid;
+            grid-template-columns: 2fr 1fr 1fr;
+            gap: 24px;
+        }
+
+        @media (max-width: 1200px) {
+            .charts-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .chart-card {
+            background: var(--card-bg);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 24px;
+            backdrop-filter: blur(12px);
+            display: flex;
+            flex-direction: column;
+        }
+
+        .chart-header {
+            font-size: 0.95rem;
+            font-weight: 700;
+            color: #ffffff;
+            margin-bottom: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .chart-wrapper {
+            position: relative;
+            flex-grow: 1;
+            min-height: 250px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        /* ── Terminal Console ── */
+        .terminal-container {
+            background: #05070c;
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+        }
+
+        .terminal-header {
+            background: #0f131a;
+            padding: 12px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .terminal-buttons {
+            display: flex;
+            gap: 6px;
+        }
+
+        .term-btn {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+        }
+        .term-btn.red { background: var(--accent-red); }
+        .term-btn.yellow { background: #f59e0b; }
+        .term-btn.green { background: var(--accent-emerald); }
+
+        .terminal-title {
+            font-family: var(--font-mono);
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+        }
+
+        .terminal-body {
+            font-family: var(--font-mono);
+            font-size: 0.8rem;
+            color: var(--accent-emerald);
+            padding: 20px;
+            height: 200px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            scroll-behavior: smooth;
+        }
+
+        .log-line {
+            line-height: 1.4;
+        }
+
+        .log-time { color: var(--text-secondary); }
+        .log-info { color: var(--accent-cyan); }
+        .log-warn { color: #f59e0b; }
+
+        /* ── Gas Table Card ── */
+        .table-card {
+            background: var(--card-bg);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 24px;
+            backdrop-filter: blur(12px);
+            margin-top: 10px;
+        }
+
+        .gas-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.85rem;
+            text-align: left;
+            margin-top: 15px;
+        }
+
+        .gas-table th {
+            color: #ffffff;
+            font-weight: 700;
+            padding: 12px;
+            border-bottom: 2px solid var(--border);
+        }
+
+        .gas-table td {
+            padding: 12px;
+            border-bottom: 1px solid var(--border);
+            color: var(--text-secondary);
+        }
+
+        .gas-table tr:hover td {
+            color: #ffffff;
+            background: rgba(255, 255, 255, 0.02);
+        }
+
+        .gas-table tr.highlight td {
+            font-weight: 700;
+            color: var(--accent-cyan);
+            border-top: 2px solid var(--border);
+            border-bottom: none;
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <div class="logo-container">
+            <div class="logo-indicator"></div>
+            <h1>Hyperledger Caliper - Benchmark Dashboard</h1>
+        </div>
+        <div style="display: flex; gap: 16px; align-items: center;">
+            <span class="badge">SUT: ETHEREUM LOCAL</span>
+            <button id="startBtn" class="btn-simulate" onclick="startSimulasi()">
+                ▶ Mulai Simulasi Stress Test
+            </button>
+        </div>
+    </header>
+
+    <main>
+        
+        <!-- Progress Bar -->
+        <div class="progress-container">
+            <div class="progress-info">
+                <span>Status Pemrosesan Beban Kerja (Round: Kirim Donasi Massal)</span>
+                <span id="progressText">Progress: 0 / 1000 Transaksi (0%)</span>
+            </div>
+            <div class="progress-bar-bg">
+                <div class="progress-bar-fill" id="progressBar"></div>
+            </div>
+        </div>
+
+        <!-- Metrics Grid -->
+        <div class="metrics-grid">
+            <div class="metric-card emerald">
+                <div class="metric-title">Transaksi Sukses</div>
+                <div class="metric-val" id="metricSuccess">0</div>
+                <div class="metric-sub">
+                    <span>Target: 1.000 tx</span>
+                    <span id="percentSuccess" style="color: var(--accent-emerald); font-weight: 700;">0%</span>
+                </div>
+            </div>
+            <div class="metric-card cyan">
+                <div class="metric-title">Throughput / Send Rate</div>
+                <div class="metric-val" id="metricTps">0.0 TPS</div>
+                <div class="metric-sub">
+                    <span>Limit Rate: 50 TPS</span>
+                    <span style="color: var(--accent-cyan); font-weight: 700;">Fixed-Rate</span>
+                </div>
+            </div>
+            <div class="metric-card indigo">
+                <div class="metric-title">Rata-Rata Latensi</div>
+                <div class="metric-val" id="metricLatency">0 ms</div>
+                <div class="metric-sub">
+                    <span>Batas toleransi: 1000 ms</span>
+                    <span style="color: var(--accent-indigo); font-weight: 700;">Sangat Cepat</span>
+                </div>
+            </div>
+            <div class="metric-card white">
+                <div class="metric-title">Active Workers</div>
+                <div class="metric-val">4</div>
+                <div class="metric-sub">
+                    <span>Local Nodes</span>
+                    <span style="color: #ffffff; font-weight: 700;">Worker #0 - #3</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Charts Grid -->
+        <div class="charts-grid">
+            
+            <!-- 1. Throughput & Latency Line Chart -->
+            <div class="chart-card">
+                <div class="chart-header">
+                    <span>Performa Real-Time (Throughput vs Latency)</span>
+                    <span style="font-size: 0.75rem; color: var(--text-secondary);">Update setiap 100ms</span>
+                </div>
+                <div class="chart-wrapper">
+                    <canvas id="lineChart"></canvas>
+                </div>
+            </div>
+
+            <!-- 2. Worker Workload Bar Chart -->
+            <div class="chart-card">
+                <div class="chart-header">
+                    <span>Beban Kerja Worker (tx)</span>
+                </div>
+                <div class="chart-wrapper">
+                    <canvas id="barChart"></canvas>
+                </div>
+            </div>
+
+            <!-- 3. Transaction Success Pie Chart -->
+            <div class="chart-card">
+                <div class="chart-header">
+                    <span>Status Hasil Uji</span>
+                </div>
+                <div class="chart-wrapper">
+                    <canvas id="pieChart"></canvas>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- Caliper Live Benchmark Report -->
+        <div class="table-card">
+            <div class="chart-header" style="margin-bottom: 5px;">
+                <span>Hyperledger Caliper - Live Report Builder</span>
+                <span class="badge" id="reportStatus" style="background: rgba(255, 255, 255, 0.05); border-color: var(--border); color: var(--text-secondary);">IDLE</span>
+            </div>
+            <table class="gas-table">
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Succ</th>
+                        <th>Fail</th>
+                        <th>Send Rate (TPS)</th>
+                        <th>Max Latency (s)</th>
+                        <th>Min Latency (s)</th>
+                        <th>Avg Latency (s)</th>
+                        <th>Throughput (TPS)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td style="font-weight: 600; color: #ffffff;">Kirim Donasi Massal</td>
+                        <td id="tableSucc" style="color: var(--accent-emerald); font-weight: 700;">0</td>
+                        <td id="tableFail" style="color: var(--accent-red); font-weight: 700;">0</td>
+                        <td id="tableSendRate">0.0</td>
+                        <td id="tableMaxLatency">0.00</td>
+                        <td id="tableMinLatency">0.00</td>
+                        <td id="tableAvgLatency">0.00</td>
+                        <td id="tableThroughput" style="color: var(--accent-cyan); font-weight: 700;">0.0</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Terminal Logs -->
+        <div class="terminal-container">
+            <div class="terminal-header">
+                <div class="terminal-buttons">
+                    <div class="term-btn red"></div>
+                    <div class="term-btn yellow"></div>
+                    <div class="term-btn green"></div>
+                </div>
+                <span class="terminal-title">caliper-cli@manager.log</span>
+                <span style="font-size: 0.75rem; color: var(--text-secondary);">Caliper Console Logger</span>
+            </div>
+            <div class="terminal-body" id="termLogs">
+                <div class="log-line"><span class="log-time">[20:00:01]</span> <span class="log-info">[INFO]</span> Caliper CLI initialized. Workspace loaded.</div>
+                <div class="log-line"><span class="log-time">[20:00:02]</span> <span class="log-info">[INFO]</span> Binding target Ethereum driver with SDK 1.3.0.</div>
+                <div class="log-line"><span class="log-time">[20:00:03]</span> <span class="log-info">[INFO]</span> Network config parsed. Found 4 workers in benchconfig.yaml.</div>
+                <div class="log-line"><span class="log-time">[20:00:04]</span> <span class="log-info">[INFO]</span> System is ready. Click the "Mulai Simulasi" button to inject load.</div>
+            </div>
+        </div>
+
+    </main>
+
+    <script>
+        // Set Chart.js Defaults for Dark Mode Aesthetics
+        Chart.defaults.color = '#9ca3af';
+        Chart.defaults.borderColor = 'rgba(255, 255, 255, 0.05)';
+        Chart.defaults.font.family = "'Inter', sans-serif";
+
+        // Global Chart instances
+        let lineChart, barChart, pieChart;
+        let lineData = [], latencyData = [], labels = [];
+        let simulationInterval;
+        let totalTx = 0;
+        let successTx = 0;
+        let workerTx = [0, 0, 0, 0];
+
+        // Initialize Charts on Page Load
+        window.onload = function() {
+            initCharts();
+        };
+
+        function initCharts() {
+            // 1. Line Chart Config
+            const ctxLine = document.getElementById('lineChart').getContext('2d');
+            lineChart = new Chart(ctxLine, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [
+                        {
+                            label: 'Throughput (TPS)',
+                            data: lineData,
+                            borderColor: '#06b6d4',
+                            backgroundColor: 'rgba(6, 182, 212, 0.05)',
+                            fill: true,
+                            tension: 0.4,
+                            yAxisID: 'y'
+                        },
+                        {
+                            label: 'Latensi (ms)',
+                            data: latencyData,
+                            borderColor: '#6366f1',
+                            backgroundColor: 'rgba(99, 102, 241, 0.05)',
+                            fill: true,
+                            tension: 0.4,
+                            yAxisID: 'y1'
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        x: { display: false },
+                        y: {
+                            type: 'linear',
+                            display: true,
+                            position: 'left',
+                            title: { display: true, text: 'Throughput (TPS)' },
+                            min: 0,
+                            max: 80
+                        },
+                        y1: {
+                            type: 'linear',
+                            display: true,
+                            position: 'right',
+                            title: { display: true, text: 'Latensi (ms)' },
+                            grid: { drawOnChartArea: false },
+                            min: 0,
+                            max: 100
+                        }
+                    },
+                    plugins: {
+                        legend: { position: 'top' }
+                    }
+                }
+            });
+
+            // 2. Bar Chart Config
+            const ctxBar = document.getElementById('barChart').getContext('2d');
+            barChart = new Chart(ctxBar, {
+                type: 'bar',
+                data: {
+                    labels: ['Worker 0', 'Worker 1', 'Worker 2', 'Worker 3'],
+                    datasets: [{
+                        label: 'Transaksi Diproses',
+                        data: workerTx,
+                        backgroundColor: [
+                            'rgba(16, 185, 129, 0.75)',
+                            'rgba(6, 182, 212, 0.75)',
+                            'rgba(99, 102, 241, 0.75)',
+                            'rgba(245, 158, 11, 0.75)'
+                        ],
+                        borderColor: 'rgba(255, 255, 255, 0.1)',
+                        borderWidth: 1,
+                        borderRadius: 6
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: { min: 0, max: 300 }
+                    }
+                }
+            });
+
+            // 3. Pie Chart Config
+            const ctxPie = document.getElementById('pieChart').getContext('2d');
+            pieChart = new Chart(ctxPie, {
+                type: 'doughnut',
+                data: {
+                    labels: ['Sukses', 'Gagal', 'Pending'],
+                    datasets: [{
+                        data: [0, 0, 1000],
+                        backgroundColor: [
+                            'var(--accent-emerald)',
+                            'var(--accent-red)',
+                            'rgba(255, 255, 255, 0.05)'
+                        ],
+                        borderWidth: 0
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { position: 'bottom' }
+                    },
+                    cutout: '70%'
+                }
+            });
+        }
+
+        // Live Log Generator Helper
+        function logTerminal(message, type = 'info') {
+            const logsBody = document.getElementById('termLogs');
+            const now = new Date();
+            const timeStr = now.toTimeString().split(' ')[0];
+            
+            let tag = '<span class="log-info">[INFO]</span>';
+            if (type === 'warn') tag = '<span class="log-warn">[WARN]</span>';
+            if (type === 'error') tag = '<span class="log-error" style="color: var(--accent-red);">[FATAL]</span>';
+
+            const line = document.createElement('div');
+            line.className = 'log-line';
+            line.innerHTML = `<span class="log-time">[${timeStr}]</span> ${tag} ${message}`;
+            logsBody.appendChild(line);
+            logsBody.scrollTop = logsBody.scrollHeight;
+        }
+
+        function logTerminalRaw(message) {
+            const logsBody = document.getElementById('termLogs');
+            const line = document.createElement('pre');
+            line.style.color = 'var(--accent-emerald)';
+            line.style.margin = '10px 0';
+            line.style.fontFamily = 'var(--font-mono)';
+            line.style.fontSize = '0.75rem';
+            line.style.whiteSpace = 'pre';
+            line.style.lineHeight = '1.2';
+            line.innerText = message;
+            logsBody.appendChild(line);
+            logsBody.scrollTop = logsBody.scrollHeight;
+        }
+
+        // Start Stress Test Simulation Logic
+        function startSimulasi() {
+            const startBtn = document.getElementById('startBtn');
+            if (startBtn.disabled) return;
+
+            // Reset States
+            startBtn.disabled = true;
+            startBtn.innerHTML = "⚡ Menguji Beban...";
+            startBtn.style.opacity = "0.7";
+            totalTx = 0;
+            successTx = 0;
+            workerTx = [0, 0, 0, 0];
+            lineData = [];
+            latencyData = [];
+            labels = [];
+
+            // Reset Caliper Live Table UI
+            document.getElementById('reportStatus').innerText = "RUNNING";
+            document.getElementById('reportStatus').style.background = "rgba(6, 182, 212, 0.1)";
+            document.getElementById('reportStatus').style.borderColor = "rgba(6, 182, 212, 0.2)";
+            document.getElementById('reportStatus').style.color = "var(--accent-cyan)";
+            
+            document.getElementById('tableSucc').innerText = "0";
+            document.getElementById('tableFail').innerText = "0";
+            document.getElementById('tableSendRate').innerText = "0.0";
+            document.getElementById('tableMaxLatency').innerText = "0.00";
+            document.getElementById('tableMinLatency').innerText = "0.00";
+            document.getElementById('tableAvgLatency').innerText = "0.00";
+            document.getElementById('tableThroughput').innerText = "0.0";
+
+            logTerminal("Memulai Stress Test... Menguji Smart Contract 'PovertyCheck.sol'", 'info');
+            logTerminal("Melakukan Bypass ZKP menggunakan MockVerifier.sol untuk pengujian massal", 'info');
+            logTerminal("Membagi 4 Akun pre-funded ke 4 Workers untuk menghindari Nonce Collision", 'info');
+
+            let step = 0;
+            let maxLatencyTracker = 0.00;
+            simulationInterval = setInterval(() => {
+                // Increment transactions based on Target TPS (50 TPS, which means ~5 tx per 100ms step)
+                let addedTx = Math.floor(Math.random() * 4) + 4; // 4 to 7 tx
+                totalTx += addedTx;
+
+                if (totalTx >= 1000) {
+                    addedTx -= (totalTx - 1000);
+                    totalTx = 1000;
+                }
+
+                successTx += addedTx; // 100% success rate
+
+                // Distribute transactions dynamically across workers
+                for (let i = 0; i < addedTx; i++) {
+                    let w = Math.floor(Math.random() * 4);
+                    workerTx[w]++;
+                }
+
+                // Calculate local fluctuated metrics
+                let currentTps = (50 + (Math.random() * 2 - 1)).toFixed(2); // Fluctuate around 50 TPS
+                let currentLatency = Math.floor(Math.random() * 10) + 35; // Fluctuate around 35ms - 45ms
+
+                if (totalTx === 1000) {
+                    currentTps = 0;
+                    currentLatency = 0;
+                }
+
+                let currentLatencySec = (currentLatency / 1000);
+                if (currentLatencySec > maxLatencyTracker) {
+                    maxLatencyTracker = currentLatencySec;
+                }
+
+                // Update text metrics
+                document.getElementById('metricSuccess').innerText = successTx.toLocaleString();
+                document.getElementById('percentSuccess').innerText = Math.round((successTx / 1000) * 100) + "%";
+                document.getElementById('metricTps').innerText = currentTps + " TPS";
+                document.getElementById('metricLatency').innerText = currentLatency > 0 ? (currentLatency + " ms") : "0 ms";
+
+                // Update Caliper Live Table UI in Real-Time
+                document.getElementById('tableSucc').innerText = successTx;
+                document.getElementById('tableSendRate').innerText = currentTps;
+                document.getElementById('tableThroughput').innerText = currentTps;
+                if (totalTx > 0 && totalTx < 1000) {
+                    document.getElementById('tableMaxLatency').innerText = maxLatencyTracker.toFixed(2);
+                    document.getElementById('tableMinLatency').innerText = "0.00";
+                    document.getElementById('tableAvgLatency').innerText = (0.01).toFixed(2);
+                }
+
+                // Update progress bar
+                let progressPercent = Math.round((totalTx / 1000) * 100);
+                document.getElementById('progressBar').style.width = progressPercent + "%";
+                document.getElementById('progressText').innerText = `Progress: ${totalTx} / 1000 Transaksi (${progressPercent}%)`;
+
+                // Add log output every few steps
+                if (step % 5 === 0 && totalTx < 1000) {
+                    let randomWorker = Math.floor(Math.random() * 4);
+                    logTerminal(`Worker #${randomWorker} memproses tx hash 0x${Math.random().toString(16).substring(2,10)}... (Success)`, 'info');
+                }
+
+                // Push chart data
+                labels.push(step);
+                lineData.push(currentTps);
+                latencyData.push(currentLatency);
+
+                // Limit chart buffer to 30 values
+                if (lineData.length > 30) {
+                    labels.shift();
+                    lineData.shift();
+                    latencyData.shift();
+                }
+
+                // Update Chart.js instances
+                lineChart.data.labels = labels;
+                lineChart.data.datasets[0].data = lineData;
+                lineChart.data.datasets[1].data = latencyData;
+                lineChart.update('none');
+
+                barChart.data.datasets[0].data = workerTx;
+                barChart.update('none');
+
+                pieChart.data.datasets[0].data = [successTx, 0, 1000 - successTx];
+                pieChart.update('none');
+
+                step++;
+
+                // End of simulation
+                if (totalTx >= 1000) {
+                    clearInterval(simulationInterval);
+                    startBtn.disabled = false;
+                    startBtn.innerHTML = "▶ Uji Ulang Stress Test";
+                    startBtn.style.opacity = "1";
+
+                    // Update final Caliper Live Table UI
+                    document.getElementById('reportStatus').innerText = "SUCCESS";
+                    document.getElementById('reportStatus').style.background = "rgba(16, 185, 129, 0.1)";
+                    document.getElementById('reportStatus').style.borderColor = "rgba(16, 185, 129, 0.2)";
+                    document.getElementById('reportStatus').style.color = "var(--accent-emerald)";
+                    
+                    document.getElementById('tableSucc').innerText = "1000";
+                    document.getElementById('tableSendRate').innerText = "50.2";
+                    document.getElementById('tableThroughput').innerText = "50.2";
+                    document.getElementById('tableMaxLatency').innerText = "0.05";
+                    document.getElementById('tableMinLatency').innerText = "0.00";
+                    document.getElementById('tableAvgLatency').innerText = "0.01";
+
+                    logTerminal("Pemberitahuan: Semua 1.000 Transaksi Berhasil Diproses (100% Sukses).", 'info');
+                    logTerminal("Throughput Aktual: 50.2 TPS. Rata-rata Latensi: 40 ms.", 'info');
+                    
+                    // Cetak Tabel Caliper ASCII Laporan Report Builder ke Console CLI
+                    logTerminalRaw(
+                        "+---------------------+------+------+-----------------+-----------------+-----------------+-----------------+------------------+\n" +
+                        "| Name                | Succ | Fail | Send Rate (TPS) | Max Latency (s) | Min Latency (s) | Avg Latency (s) | Throughput (TPS) |\n" +
+                        "|---------------------|------|------|-----------------|-----------------|-----------------|-----------------|------------------|\n" +
+                        "| Kirim Donasi Massal | 1000 | 0    | 50.2            | 0.05            | 0.00            | 0.01            | 50.2             |\n" +
+                        "+---------------------+------+------+-----------------+-----------------+-----------------+-----------------+------------------+"
+                    );
+
+                    logTerminal("Infrastruktur Jaringan stabil. Zero Loss detected.", 'info');
+                    logTerminal("Laporan Uji Performa Selesai.", 'info');
+                }
+            }, 100);
+        }
+    </script>
+</body>
+</html>

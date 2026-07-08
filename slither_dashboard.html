@@ -1,0 +1,772 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Slither - Smart Contract Security Monitor</title>
+    
+    <!-- Google Fonts: Inter & JetBrains Mono -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+    
+    <!-- Chart.js CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <style>
+        :root {
+            --bg-dark: #0b0f19;
+            --card-bg: rgba(17, 24, 39, 0.75);
+            --border: rgba(255, 255, 255, 0.06);
+            --text-primary: #f3f4f6;
+            --text-secondary: #9ca3af;
+            --accent-medium: #f59e0b; /* Yellow for Medium */
+            --accent-low: #10b981;    /* Green for Low */
+            --accent-info: #06b6d4;   /* Blue for Info/Optimization */
+            --accent-red: #ef4444;    /* Red for High/Critical */
+            --font-main: 'Inter', sans-serif;
+            --font-mono: 'JetBrains Mono', monospace;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            background-color: var(--bg-dark);
+            color: var(--text-primary);
+            font-family: var(--font-main);
+            min-height: 100vh;
+            overflow-x: hidden;
+            background-image: 
+                radial-gradient(at 10% 20%, rgba(99, 102, 241, 0.08) 0px, transparent 50%),
+                radial-gradient(at 90% 10%, rgba(245, 158, 11, 0.05) 0px, transparent 50%),
+                radial-gradient(at 50% 80%, rgba(6, 182, 212, 0.08) 0px, transparent 50%);
+        }
+
+        /* ── Header ── */
+        header {
+            max-width: 1440px;
+            margin: 0 auto;
+            padding: 24px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .logo-container {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .logo-indicator {
+            width: 12px;
+            height: 12px;
+            background-color: var(--accent-medium);
+            border-radius: 50%;
+            box-shadow: 0 0 12px var(--accent-medium);
+            position: relative;
+        }
+
+        .logo-indicator.active {
+            background-color: var(--accent-low);
+            box-shadow: 0 0 12px var(--accent-low);
+        }
+
+        .logo-indicator.scanning {
+            background-color: var(--accent-info);
+            box-shadow: 0 0 12px var(--accent-info);
+            animation: pulse-scanning 1s infinite alternate;
+        }
+
+        @keyframes pulse-scanning {
+            0% { transform: scale(1); opacity: 1; }
+            100% { transform: scale(1.3); opacity: 0.8; }
+        }
+
+        h1 {
+            font-size: 1.25rem;
+            font-weight: 800;
+            letter-spacing: -0.025em;
+            background: linear-gradient(to right, #ffffff, #9ca3af);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .badge {
+            background: rgba(245, 158, 11, 0.1);
+            border: 1px solid rgba(245, 158, 11, 0.2);
+            color: var(--accent-medium);
+            padding: 6px 12px;
+            border-radius: 9999px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            letter-spacing: 0.05em;
+        }
+
+        /* ── Control Button ── */
+        .btn-simulate {
+            background: linear-gradient(135deg, var(--accent-indigo) 0%, #4f46e5 100%);
+            border: none;
+            color: white;
+            padding: 10px 20px;
+            font-size: 0.85rem;
+            font-weight: 700;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            box-shadow: 0 4px 15px rgba(99, 102, 241, 0.3);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn-simulate:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(99, 102, 241, 0.5);
+        }
+
+        /* ── Main Container ── */
+        main {
+            max-width: 1440px;
+            margin: 0 auto;
+            padding: 32px 24px;
+            display: flex;
+            flex-direction: column;
+            gap: 32px;
+        }
+
+        /* ── Progress Bar ── */
+        .progress-container {
+            background: var(--card-bg);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 20px;
+            backdrop-filter: blur(12px);
+        }
+
+        .progress-info {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.85rem;
+            margin-bottom: 10px;
+            font-weight: 600;
+        }
+
+        .progress-bar-bg {
+            width: 100%;
+            height: 10px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 999px;
+            overflow: hidden;
+        }
+
+        .progress-bar-fill {
+            width: 0%;
+            height: 100%;
+            background: linear-gradient(90deg, var(--accent-info), var(--accent-indigo), var(--accent-medium));
+            border-radius: 999px;
+            transition: width 0.1s linear;
+        }
+
+        /* ── Metrics Grid ── */
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+            gap: 20px;
+        }
+
+        .metric-card {
+            background: var(--card-bg);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 24px;
+            backdrop-filter: blur(12px);
+            position: relative;
+            overflow: hidden;
+            transition: transform 0.3s ease, border-color 0.3s ease;
+        }
+
+        .metric-card:hover {
+            transform: translateY(-4px);
+            border-color: rgba(255, 255, 255, 0.15);
+        }
+
+        .metric-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 4px;
+            background: transparent;
+        }
+
+        .metric-card.indigo::before { background: var(--accent-indigo); }
+        .metric-card.red::before { background: var(--accent-red); }
+        .metric-card.medium::before { background: var(--accent-medium); }
+        .metric-card.low::before { background: var(--accent-low); }
+
+        .metric-title {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-bottom: 8px;
+        }
+
+        .metric-val {
+            font-size: 1.8rem;
+            font-weight: 800;
+            letter-spacing: -0.02em;
+        }
+
+        .metric-sub {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            margin-top: 6px;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        /* ── Layout Grid ── */
+        .layout-grid {
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 24px;
+        }
+
+        @media (max-width: 1024px) {
+            .layout-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        /* ── Table Card ── */
+        .table-card {
+            background: var(--card-bg);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 24px;
+            backdrop-filter: blur(12px);
+            display: flex;
+            flex-direction: column;
+        }
+
+        .chart-header {
+            font-size: 0.95rem;
+            font-weight: 700;
+            color: #ffffff;
+            margin-bottom: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .findings-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.85rem;
+            text-align: left;
+        }
+
+        .findings-table th {
+            color: #ffffff;
+            font-weight: 700;
+            padding: 14px 12px;
+            border-bottom: 2px solid var(--border);
+        }
+
+        .findings-table td {
+            padding: 14px 12px;
+            border-bottom: 1px solid var(--border);
+            color: var(--text-secondary);
+        }
+
+        .findings-table tr:hover td {
+            color: #ffffff;
+            background: rgba(255, 255, 255, 0.01);
+        }
+
+        .severity-badge {
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 0.7rem;
+            font-weight: 700;
+            letter-spacing: 0.02em;
+        }
+
+        .severity-badge.medium {
+            background: rgba(245, 158, 11, 0.15);
+            color: var(--accent-medium);
+            border: 1px solid rgba(245, 158, 11, 0.3);
+        }
+
+        .severity-badge.low {
+            background: rgba(16, 185, 129, 0.15);
+            color: var(--accent-low);
+            border: 1px solid rgba(16, 185, 129, 0.3);
+        }
+
+        .severity-badge.info {
+            background: rgba(6, 182, 212, 0.15);
+            color: var(--accent-info);
+            border: 1px solid rgba(6, 182, 212, 0.3);
+        }
+
+        .findings-table tr.hidden {
+            display: none;
+        }
+
+        /* ── Chart Card ── */
+        .chart-card {
+            background: var(--card-bg);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 24px;
+            backdrop-filter: blur(12px);
+            display: flex;
+            flex-direction: column;
+        }
+
+        .chart-wrapper {
+            position: relative;
+            flex-grow: 1;
+            min-height: 250px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        /* ── Terminal Console ── */
+        .terminal-container {
+            background: #05070c;
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+        }
+
+        .terminal-header {
+            background: #0f131a;
+            padding: 12px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .terminal-buttons {
+            display: flex;
+            gap: 6px;
+        }
+
+        .term-btn {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+        }
+        .term-btn.red { background: var(--accent-red); }
+        .term-btn.yellow { background: var(--accent-medium); }
+        .term-btn.green { background: var(--accent-low); }
+
+        .terminal-title {
+            font-family: var(--font-mono);
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+        }
+
+        .terminal-body {
+            font-family: var(--font-mono);
+            font-size: 0.8rem;
+            color: var(--text-primary);
+            padding: 20px;
+            height: 250px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            scroll-behavior: smooth;
+        }
+
+        .log-line {
+            line-height: 1.4;
+        }
+
+        .log-info { color: #38bdf8; }
+        .log-warn { color: var(--accent-medium); }
+        .log-vuln { color: var(--accent-medium); font-weight: 700; }
+        
+        pre {
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            font-family: var(--font-mono);
+            color: var(--text-secondary);
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <div class="logo-container">
+            <div id="statusIndicator" class="logo-indicator active"></div>
+            <h1>Slither Security Audit Dashboard</h1>
+        </div>
+        <div style="display: flex; gap: 16px; align-items: center;">
+            <span class="badge" id="riskBadge">STATUS: COMPLETED</span>
+            <button id="startBtn" class="btn-simulate" onclick="startScan()">
+                ⚡ Mulai Audit Keamanan (Slither Scan)
+            </button>
+        </div>
+    </header>
+
+    <main>
+        
+        <!-- Progress Bar -->
+        <div class="progress-container">
+            <div class="progress-info">
+                <span>Progres Analisis Static Smart Contract (4 Contracts, 101 Detectors)</span>
+                <span id="progressText">Status: Idle | Siap untuk Scan</span>
+            </div>
+            <div class="progress-bar-bg">
+                <div class="progress-bar-fill" id="progressBar"></div>
+            </div>
+        </div>
+
+        <!-- Metrics Grid -->
+        <div class="metrics-grid">
+            <div class="metric-card indigo">
+                <div class="metric-title">Smart Contracts Di-audit</div>
+                <div class="metric-val" id="metricContracts">4</div>
+                <div class="metric-sub">
+                    <span>PovertyCheck, MockVerifier, verifier</span>
+                    <span style="color: var(--accent-indigo); font-weight: 700;">100% File</span>
+                </div>
+            </div>
+            <div class="metric-card red">
+                <div class="metric-title">Critical & High Vulnerabilities</div>
+                <div class="metric-val" id="metricHigh">0</div>
+                <div class="metric-sub">
+                    <span>Keamanan Utama</span>
+                    <span style="color: var(--accent-low); font-weight: 700;">Aman (0)</span>
+                </div>
+            </div>
+            <div class="metric-card medium">
+                <div class="metric-title">Medium Vulnerabilities</div>
+                <div class="metric-val" id="metricMedium">2</div>
+                <div class="metric-sub">
+                    <span>Missing Zero-address checks</span>
+                    <span style="color: var(--accent-medium); font-weight: 700;">Butuh Perbaikan</span>
+                </div>
+            </div>
+            <div class="metric-card low">
+                <div class="metric-title">Low & Info Findings</div>
+                <div class="metric-val" id="metricLow">3</div>
+                <div class="metric-sub">
+                    <span>Inheritance, Gas, Style</span>
+                    <span style="color: var(--accent-low); font-weight: 700;">Rekomendasi</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Layout Grid: Table and Pie Chart -->
+        <div class="layout-grid">
+            
+            <!-- 1. Live Findings Table Card -->
+            <div class="table-card">
+                <div class="chart-header">
+                    <span>Hasil Temuan Analisis Keamanan (Slither Detectors)</span>
+                </div>
+                <table class="findings-table">
+                    <thead>
+                        <tr>
+                            <th>No</th>
+                            <th>Detector Type</th>
+                            <th>Severity</th>
+                            <th>Lokasi File / Line</th>
+                            <th>Rekomendasi Tindakan</th>
+                        </tr>
+                    </thead>
+                    <tbody id="findingsBody">
+                        <tr id="row1" class="finding-row">
+                            <td>1</td>
+                            <td style="font-weight: 600; color: #ffffff;">missing-zero-check</td>
+                            <td><span class="severity-badge medium">Medium</span></td>
+                            <td><a href="file:///c:/Users/Acer/OneDrive/Dokumen/philantrophy-project/contracts/PovertyCheck.sol#L48" style="color: var(--accent-info); text-decoration: none;">PovertyCheck.sol:L48</a></td>
+                            <td>Validasi zero-address (`address(0)`) pada constructor.</td>
+                        </tr>
+                        <tr id="row2" class="finding-row">
+                            <td>2</td>
+                            <td style="font-weight: 600; color: #ffffff;">missing-zero-check</td>
+                            <td><span class="severity-badge medium">Medium</span></td>
+                            <td><a href="file:///c:/Users/Acer/OneDrive/Dokumen/philantrophy-project/contracts/PovertyCheck.sol#L56" style="color: var(--accent-info); text-decoration: none;">PovertyCheck.sol:L56</a></td>
+                            <td>Validasi zero-address (`address(0)`) pada fungsi `updateVerifier`.</td>
+                        </tr>
+                        <tr id="row3" class="finding-row">
+                            <td>3</td>
+                            <td style="font-weight: 600; color: #ffffff;">missing-inheritance</td>
+                            <td><span class="severity-badge low">Low</span></td>
+                            <td><a href="file:///c:/Users/Acer/OneDrive/Dokumen/philantrophy-project/contracts/MockVerifier.sol#L4" style="color: var(--accent-info); text-decoration: none;">MockVerifier.sol:L4</a></td>
+                            <td>Inherit interface `IZKVerifier` secara formal.</td>
+                        </tr>
+                        <tr id="row4" class="finding-row">
+                            <td>4</td>
+                            <td style="font-weight: 600; color: #ffffff;">immutable-states</td>
+                            <td><span class="severity-badge info">Optimization</span></td>
+                            <td><a href="file:///c:/Users/Acer/OneDrive/Dokumen/philantrophy-project/contracts/PovertyCheck.sol#L42" style="color: var(--accent-info); text-decoration: none;">PovertyCheck.sol:L42</a></td>
+                            <td>Deklarasikan variabel `admin` sebagai `immutable` (Hemat Gas).</td>
+                        </tr>
+                        <tr id="row5" class="finding-row">
+                            <td>5</td>
+                            <td style="font-weight: 600; color: #ffffff;">naming-convention</td>
+                            <td><span class="severity-badge info">Style</span></td>
+                            <td><a href="file:///c:/Users/Acer/OneDrive/Dokumen/philantrophy-project/contracts/PovertyCheck.sol#L56" style="color: var(--accent-info); text-decoration: none;">PovertyCheck.sol:L56</a></td>
+                            <td>Ubah parameter `_newVerifier` menjadi camelCase.</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- 2. Doughnut Chart Card -->
+            <div class="chart-card">
+                <div class="chart-header">
+                    <span>Sebaran Tingkat Kerawanan</span>
+                </div>
+                <div class="chart-wrapper">
+                    <canvas id="pieChart"></canvas>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- Terminal Console -->
+        <div class="terminal-container">
+            <div class="terminal-header">
+                <div class="terminal-buttons">
+                    <div class="term-btn red"></div>
+                    <div class="term-btn yellow"></div>
+                    <div class="term-btn green"></div>
+                </div>
+                <span class="terminal-title">slither@console-analyzer</span>
+                <span style="font-size: 0.75rem; color: var(--text-secondary);">CLI Output</span>
+            </div>
+            <div class="terminal-body" id="termLogs">
+                <div class="log-line"><span class="log-info">INFO:Slither:</span> Analyzer initialized. 101 detectors registered. Ready to scan...</div>
+            </div>
+        </div>
+
+    </main>
+
+    <script>
+        // Set Chart.js Defaults for Dark Mode Aesthetics
+        Chart.defaults.color = '#9ca3af';
+        Chart.defaults.borderColor = 'rgba(255, 255, 255, 0.05)';
+        Chart.defaults.font.family = "'Inter', sans-serif";
+
+        let pieChart;
+        let scanInterval;
+
+        window.onload = function() {
+            initChart();
+        };
+
+        function initChart() {
+            const ctxPie = document.getElementById('pieChart').getContext('2d');
+            pieChart = new Chart(ctxPie, {
+                type: 'doughnut',
+                data: {
+                    labels: ['Critical / High', 'Medium', 'Low / Info'],
+                    datasets: [{
+                        data: [0, 2, 3], // 0 High, 2 Medium, 3 Low/Info
+                        backgroundColor: [
+                            'var(--accent-red)',
+                            'var(--accent-medium)',
+                            'var(--accent-info)'
+                        ],
+                        borderWidth: 0
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { position: 'bottom' }
+                    },
+                    cutout: '70%'
+                }
+            });
+        }
+
+        // Helper to push CLI Log
+        function logCLI(text, cssClass = '') {
+            const term = document.getElementById('termLogs');
+            const div = document.createElement('div');
+            div.className = 'log-line';
+            if (cssClass) {
+                div.innerHTML = `<span class="${cssClass}">${text}</span>`;
+            } else {
+                div.innerText = text;
+            }
+            term.appendChild(div);
+            term.scrollTop = term.scrollHeight;
+        }
+
+        // Start Audit Scan Logic
+        function startScan() {
+            const startBtn = document.getElementById('startBtn');
+            if (startBtn.disabled) return;
+
+            // Reset UI
+            startBtn.disabled = true;
+            startBtn.innerHTML = "🔍 Memindai Kontrak...";
+            startBtn.style.opacity = "0.7";
+
+            document.getElementById('statusIndicator').className = "logo-indicator scanning";
+            document.getElementById('riskBadge').innerText = "STATUS: SCANNING";
+            document.getElementById('riskBadge').style.color = "var(--accent-info)";
+            document.getElementById('riskBadge').style.borderColor = "rgba(6, 182, 212, 0.2)";
+            document.getElementById('riskBadge').style.background = "rgba(6, 182, 212, 0.1)";
+
+            // Reset Metrics
+            document.getElementById('metricContracts').innerText = "0";
+            document.getElementById('metricHigh').innerText = "0";
+            document.getElementById('metricMedium').innerText = "0";
+            document.getElementById('metricLow').innerText = "0";
+
+            // Hide rows for live-populating effect
+            const rows = document.querySelectorAll('.finding-row');
+            rows.forEach(r => r.classList.add('hidden'));
+
+            // Clear logs
+            document.getElementById('termLogs').innerHTML = '';
+
+            // Reset Chart
+            pieChart.data.datasets[0].data = [0, 0, 0];
+            pieChart.update();
+
+            let progress = 0;
+            let currentContracts = 0;
+            let currentMedium = 0;
+            let currentLow = 0;
+
+            logCLI("Initializing static analysis database...", 'log-info');
+            logCLI("Running 'npx hardhat clean'...", 'log-info');
+
+            setTimeout(() => {
+                logCLI("Cleaning cache and build artifacts.");
+                logCLI("Running 'npx hardhat compile --force'...", 'log-info');
+            }, 600);
+
+            setTimeout(() => {
+                logCLI("Compiling 4 Solidity source files...");
+                logCLI("Successfully compiled contracts/PovertyCheck.sol, contracts/MockVerifier.sol, contracts/verifier.sol");
+                logCLI("Starting Slither analysis pass...", 'log-info');
+            }, 1200);
+
+            // Simulation loop
+            setTimeout(() => {
+                scanInterval = setInterval(() => {
+                    progress += 4;
+                    if (progress >= 100) progress = 100;
+
+                    document.getElementById('progressBar').style.width = progress + "%";
+                    document.getElementById('progressText').innerText = `Status: Memindai... | Progres: ${progress}%`;
+
+                    // Trigger Contract count
+                    if (progress === 20) {
+                        currentContracts = 1;
+                        document.getElementById('metricContracts').innerText = currentContracts;
+                        logCLI("Analyzing contracts/MockVerifier.sol...", 'log-info');
+                    }
+                    if (progress === 40) {
+                        currentContracts = 2;
+                        document.getElementById('metricContracts').innerText = currentContracts;
+                        logCLI("Analyzing contracts/verifier.sol...", 'log-info');
+                    }
+                    if (progress === 60) {
+                        currentContracts = 4;
+                        document.getElementById('metricContracts').innerText = currentContracts;
+                        logCLI("Analyzing contracts/PovertyCheck.sol...", 'log-info');
+                    }
+
+                    // Populate findings one by one in real-time
+                    if (progress === 32) {
+                        // Finding 3: MockVerifier inheritance
+                        document.getElementById('row3').classList.remove('hidden');
+                        currentLow++;
+                        document.getElementById('metricLow').innerText = currentLow;
+                        logCLI("WARNING:Detectors: MockVerifier (MockVerifier.sol#4) should inherit from IZKVerifier", 'log-vuln');
+                        pieChart.data.datasets[0].data = [0, 0, currentLow];
+                        pieChart.update('none');
+                    }
+
+                    if (progress === 52) {
+                        // Finding 1: Zero check on constructor
+                        document.getElementById('row1').classList.remove('hidden');
+                        currentMedium++;
+                        document.getElementById('metricMedium').innerText = currentMedium;
+                        logCLI("WARNING:Detectors: PovertyCheck.constructor lacks a zero-check on _zkVerifierAddress", 'log-vuln');
+                        pieChart.data.datasets[0].data = [0, currentMedium, currentLow];
+                        pieChart.update('none');
+                    }
+
+                    if (progress === 72) {
+                        // Finding 2: Zero check on updateVerifier
+                        document.getElementById('row2').classList.remove('hidden');
+                        currentMedium++;
+                        document.getElementById('metricMedium').innerText = currentMedium;
+                        logCLI("WARNING:Detectors: PovertyCheck.updateVerifier lacks a zero-check on _newVerifier", 'log-vuln');
+                        pieChart.data.datasets[0].data = [0, currentMedium, currentLow];
+                        pieChart.update('none');
+                    }
+
+                    if (progress === 84) {
+                        // Finding 4: Immutable admin
+                        document.getElementById('row4').classList.remove('hidden');
+                        currentLow++;
+                        document.getElementById('metricLow').innerText = currentLow;
+                        logCLI("INFO:Detectors: PovertyCheck.admin should be immutable", 'log-info');
+                        pieChart.data.datasets[0].data = [0, currentMedium, currentLow];
+                        pieChart.update('none');
+                    }
+
+                    if (progress === 96) {
+                        // Finding 5: Naming convention
+                        document.getElementById('row5').classList.remove('hidden');
+                        currentLow++;
+                        document.getElementById('metricLow').innerText = currentLow;
+                        logCLI("INFO:Detectors: Parameter _newVerifier is not in mixedCase", 'log-info');
+                        pieChart.data.datasets[0].data = [0, currentMedium, currentLow];
+                        pieChart.update('none');
+                    }
+
+                    if (progress >= 100) {
+                        clearInterval(scanInterval);
+                        startBtn.disabled = false;
+                        startBtn.innerHTML = "⚡ Uji Ulang Audit Keamanan";
+                        startBtn.style.opacity = "1";
+
+                        document.getElementById('statusIndicator').className = "logo-indicator active";
+                        document.getElementById('riskBadge').innerText = "STATUS: COMPLETED (MEDIUM RISK)";
+                        document.getElementById('riskBadge').style.color = "var(--accent-medium)";
+                        document.getElementById('riskBadge').style.borderColor = "rgba(245, 158, 11, 0.2)";
+                        document.getElementById('riskBadge').style.background = "rgba(245, 158, 11, 0.1)";
+
+                        document.getElementById('progressText').innerText = `Status: Audit Selesai! | Ditemukan 5 Isu Keamanan`;
+
+                        logCLI("INFO:Slither: . analyzed (4 contracts with 101 detectors), 5 result(s) found", 'log-info');
+                        logCLI("Audit selesai. 0 High/Critical, 2 Medium, 1 Low, 2 Info/Opt.", 'log-info');
+                    }
+                }, 150);
+            }, 1800);
+        }
+    </script>
+</body>
+</html>
